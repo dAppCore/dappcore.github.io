@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CoreAgent — Claude Code Plugin</title>
+<meta name="description" content="Agentic dispatch, review pipelines, OpenBrain integration, and cross-agent messaging for Claude Code.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Newsreader:ital,wght@0,300;0,500;1,300&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root {
+  --bg: #0a0b0e;
+  --surface: #12141a;
+  --border: #1e2130;
+  --border-bright: #2a2d42;
+  --text: #c8cad8;
+  --text-dim: #6b6f84;
+  --text-bright: #e8eaf4;
+  --accent: #7b8cde;
+  --accent-dim: #4a5494;
+  --green: #5fba7d;
+  --amber: #d4a853;
+  --mono: 'JetBrains Mono', monospace;
+  --serif: 'Newsreader', Georgia, serif;
+}
+
+html { font-size: 16px; scroll-behavior: smooth }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  font-weight: 300;
+  line-height: 1.7;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* --- Grain overlay --- */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+a { color: var(--accent); text-decoration: none }
+a:hover { color: var(--text-bright) }
+
+/* --- Layout --- */
+.wrap {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 2rem;
+}
+
+/* --- Header --- */
+header {
+  padding: 6rem 0 4rem;
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+header::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 400px; height: 400px;
+  background: radial-gradient(circle, rgba(123,140,222,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+.badge {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--green);
+  border: 1px solid rgba(95,186,125,0.25);
+  padding: 0.2em 0.7em;
+  border-radius: 2px;
+  margin-bottom: 1.5rem;
+}
+
+h1 {
+  font-family: var(--serif);
+  font-weight: 300;
+  font-size: 3.2rem;
+  color: var(--text-bright);
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+  margin-bottom: 1rem;
+}
+
+h1 em {
+  font-style: italic;
+  color: var(--accent);
+}
+
+.subtitle {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  max-width: 520px;
+  line-height: 1.8;
+}
+
+/* --- Install block --- */
+.install {
+  margin: 3rem 0;
+  padding: 1.5rem 2rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  position: relative;
+}
+
+.install-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--text-dim);
+  margin-bottom: 0.5rem;
+}
+
+.install code {
+  font-size: 0.95rem;
+  color: var(--text-bright);
+  font-weight: 400;
+}
+
+.install code .flag { color: var(--accent) }
+.install code .url { color: var(--amber) }
+
+/* --- Sections --- */
+section {
+  padding: 3.5rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+section:last-of-type { border-bottom: none }
+
+h2 {
+  font-family: var(--serif);
+  font-weight: 500;
+  font-size: 1.4rem;
+  color: var(--text-bright);
+  margin-bottom: 2rem;
+  letter-spacing: -0.01em;
+}
+
+h2 .count {
+  font-family: var(--mono);
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  font-weight: 300;
+  margin-left: 0.5rem;
+}
+
+/* --- Command grid --- */
+.cmd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+}
+
+.cmd {
+  background: var(--surface);
+  padding: 1.2rem 1.4rem;
+  transition: background 0.2s;
+}
+
+.cmd:hover { background: #161825 }
+
+.cmd-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  margin-bottom: 0.3rem;
+}
+
+.cmd-name::before {
+  content: '/';
+  color: var(--text-dim);
+}
+
+.cmd-desc {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* --- Skills list --- */
+.skills {
+  columns: 2;
+  column-gap: 2rem;
+  font-size: 0.78rem;
+}
+
+.skill {
+  break-inside: avoid;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.skill-dot {
+  width: 4px; height: 4px;
+  background: var(--accent-dim);
+  border-radius: 50%;
+  flex-shrink: 0;
+  margin-top: 0.4rem;
+}
+
+.skill-name { color: var(--text) }
+.skill-type {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* --- Agents --- */
+.agents {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.agent {
+  padding: 1.4rem 1.6rem;
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.agent-name {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--text-bright);
+  margin-bottom: 0.3rem;
+}
+
+.agent-desc {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  line-height: 1.5;
+}
+
+/* --- Meta --- */
+.meta {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 2rem;
+  font-size: 0.75rem;
+}
+
+.meta dt {
+  color: var(--text-dim);
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  margin-bottom: 0.3rem;
+}
+
+.meta dd { color: var(--text) }
+
+/* --- Footer --- */
+footer {
+  padding: 3rem 0 4rem;
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+footer a { color: var(--text-dim) }
+footer a:hover { color: var(--text) }
+
+/* --- Responsive --- */
+@media (max-width: 600px) {
+  h1 { font-size: 2.2rem }
+  .cmd-grid { grid-template-columns: 1fr }
+  .skills { columns: 1 }
+  .agents { grid-template-columns: 1fr }
+  .meta { grid-template-columns: 1fr }
+  header { padding: 4rem 0 3rem }
+}
+
+/* --- Fade in --- */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(12px) }
+  to { opacity: 1; transform: translateY(0) }
+}
+
+header, section, footer {
+  animation: rise 0.6s ease both;
+}
+
+section:nth-of-type(1) { animation-delay: 0.1s }
+section:nth-of-type(2) { animation-delay: 0.15s }
+section:nth-of-type(3) { animation-delay: 0.2s }
+section:nth-of-type(4) { animation-delay: 0.25s }
+section:nth-of-type(5) { animation-delay: 0.3s }
+footer { animation-delay: 0.35s }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+<header>
+  <div class="badge">Claude Code Plugin</div>
+  <h1>Core<em>Agent</em></h1>
+  <p class="subtitle">Agentic dispatch, review pipelines, cross-agent messaging, and OpenBrain integration. The operational layer for the Lethean Network's dAppCore ecosystem.</p>
+
+  <div class="install">
+    <div class="install-label">Install</div>
+    <code>claude plugin add <span class="url">https://dappco.re/agent/claude</span></code>
+  </div>
+</header>
+
+<section>
+  <h2>Commands <span class="count">13</span></h2>
+  <div class="cmd-grid">
+    <div class="cmd">
+      <div class="cmd-name">dispatch</div>
+      <div class="cmd-desc">Dispatch a subagent to a sandboxed workspace</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">status</div>
+      <div class="cmd-desc">Show agent workspace states</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">review</div>
+      <div class="cmd-desc">Review completed agent workspace output</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">review-pr</div>
+      <div class="cmd-desc">Review a pull request</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">code-review</div>
+      <div class="cmd-desc">Code review on staged changes</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">security</div>
+      <div class="cmd-desc">Security-focused code review</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">pipeline</div>
+      <div class="cmd-desc">Run the 5-agent review pipeline</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">scan</div>
+      <div class="cmd-desc">Scan Forge repos for open issues</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">recall</div>
+      <div class="cmd-desc">Search OpenBrain memories</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">remember</div>
+      <div class="cmd-desc">Save context to OpenBrain</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">verify</div>
+      <div class="cmd-desc">Verify work is complete before stopping</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">tests</div>
+      <div class="cmd-desc">Verify tests pass for changed files</div>
+    </div>
+    <div class="cmd">
+      <div class="cmd-name">ready</div>
+      <div class="cmd-desc">Quick check if work is ready to commit</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Agents <span class="count">2</span></h2>
+  <div class="agents">
+    <div class="agent">
+      <div class="agent-name">Code Reviewer</div>
+      <div class="agent-desc">Reviews code for bugs, logic errors, security issues, and adherence to project conventions.</div>
+    </div>
+    <div class="agent">
+      <div class="agent-name">Code Simplifier</div>
+      <div class="agent-desc">Simplifies and refines code for clarity while preserving all functionality.</div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Skills <span class="count">20</span></h2>
+  <div class="skills">
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Deploy to Homelab</span>
+      <span class="skill-type">ops</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Deploy to Production</span>
+      <span class="skill-type">ops</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Architecture Review</span>
+      <span class="skill-type">review</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Security Review</span>
+      <span class="skill-type">review</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Review Pipeline</span>
+      <span class="skill-type">review</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Test Analysis</span>
+      <span class="skill-type">review</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">App Split</span>
+      <span class="skill-type">refactor</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Senior Dev Fix</span>
+      <span class="skill-type">debug</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Reality Check</span>
+      <span class="skill-type">guard</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Orchestrate</span>
+      <span class="skill-type">dispatch</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Ledger Papers</span>
+      <span class="skill-type">research</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Project Archaeology</span>
+      <span class="skill-type">research</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Whitepaper Archive</span>
+      <span class="skill-type">research</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Community Chat</span>
+      <span class="skill-type">comms</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">BitcoinTalk</span>
+      <span class="skill-type">collect</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">GitHub History</span>
+      <span class="skill-type">collect</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Block Explorer</span>
+      <span class="skill-type">collect</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">Mining Pools</span>
+      <span class="skill-type">collect</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">CoinMarketCap</span>
+      <span class="skill-type">collect</span>
+    </div>
+    <div class="skill">
+      <div class="skill-dot"></div>
+      <span class="skill-name">CryptoNote Discovery</span>
+      <span class="skill-type">collect</span>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Details</h2>
+  <dl class="meta">
+    <div>
+      <dt>Version</dt>
+      <dd>0.10.0</dd>
+    </div>
+    <div>
+      <dt>Licence</dt>
+      <dd>EUPL-1.2</dd>
+    </div>
+    <div>
+      <dt>Author</dt>
+      <dd>Lethean Community</dd>
+    </div>
+    <div>
+      <dt>Source</dt>
+      <dd><a href="https://github.com/dAppCore/agent">github.com/dAppCore/agent</a></dd>
+    </div>
+    <div>
+      <dt>MCP Server</dt>
+      <dd>core-agent</dd>
+    </div>
+    <div>
+      <dt>Transport</dt>
+      <dd>stdio / HTTP</dd>
+    </div>
+  </dl>
+</section>
+
+<footer>
+  <span>dAppCore &mdash; Lethean Network</span>
+  <a href="https://github.com/dAppCore/agent">GitHub</a>
+</footer>
+
+</div>
+</body>
+</html>

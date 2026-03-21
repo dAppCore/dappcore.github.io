@@ -1,0 +1,47 @@
+{
+  "name": "dAppCore Agentic",
+  "description": "Agentic systems to work on the Lethean Network's dAppCore project",
+  "owner": {
+    "name": "Lethean Community",
+    "email": "hello@lethean.io"
+  },
+  "plugins": [
+    {
+      "name": "CoreAgent",
+      "source": {
+        "source": "git-subdir",
+        "path": "claude/core",
+        "url": "https://github.com/dappcore/agent.git"
+      },
+      "description": "Core agent platform",
+      "version": "0.10.0"
+    },
+    {
+      "name": "CorePHP",
+      "source": {
+        "source": "url",
+        "url": "https://forge.lthn.ai/core/php.git"
+      },
+      "description": "PHP/Laravel development skills, API generation, and formatting",
+      "version": "0.1.0"
+    },
+    {
+      "name": "CoreBuild",
+      "source": {
+        "source": "url",
+        "url": "https://forge.lthn.ai/core/go-build.git"
+      },
+      "description": "Go QA pipeline, build tooling, and development skills",
+      "version": "0.1.0"
+    },
+    {
+      "name": "CoreDevOps",
+      "source": {
+        "source": "url",
+        "url": "https://forge.lthn.ai/core/go-devops.git"
+      },
+      "description": "CI/CD, deployment, issue tracking, and Coolify integration",
+      "version": "0.1.0"
+    }
+  ]
+}
