@@ -50,6 +50,12 @@ export default defineConfig({
 						{ label: 'Errors', slug: 'go/error' },
 					],
 				},
+				{
+					label: 'Packages',
+					items: [
+						{ label: 'agent', slug: 'go/agent' },
+					],
+				},
 			],
 		}),
 	],
