@@ -54,6 +54,12 @@ export default defineConfig({
 					label: 'Packages',
 					items: [
 						{ label: 'agent', slug: 'go/agent' },
+						{ label: 'mcp', slug: 'go/mcp' },
+						{ label: 'miner', slug: 'go/miner' },
+						{ label: 'pool', slug: 'go/pool' },
+						{ label: 'proxy', slug: 'go/proxy' },
+						{ label: 'stream', slug: 'go/stream' },
+						{ label: 'tenant', slug: 'go/tenant' },
 					],
 				},
 			],
