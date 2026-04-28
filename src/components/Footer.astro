@@ -1,0 +1,46 @@
+---
+import Default from '@astrojs/starlight/components/Footer.astro';
+---
+
+<Default><slot /></Default>
+
+<footer class="site-footer">
+	<div class="links">
+		<a href="https://lthn.ai/" rel="noopener">lthn.ai</a>
+		<span class="dot" aria-hidden="true">·</span>
+		<a href="https://lthn.io/" rel="noopener">lthn.io</a>
+		<span class="dot" aria-hidden="true">·</span>
+		<a href="https://github.com/dappcore/go" rel="noopener">github.com/dappcore/go</a>
+	</div>
+	<div class="meta">EUPL-1.2 · part of the dAppCore ecosystem</div>
+</footer>
+
+<style>
+	.site-footer {
+		margin-top: 2rem;
+		padding: 1.5rem 0;
+		border-top: 1px solid var(--sl-color-hairline);
+		text-align: center;
+		color: var(--sl-color-gray-3);
+		font-size: var(--sl-text-sm);
+	}
+
+	.site-footer .links a {
+		color: var(--sl-color-text-accent);
+		text-decoration: none;
+	}
+
+	.site-footer .links a:hover {
+		text-decoration: underline;
+	}
+
+	.site-footer .dot {
+		margin: 0 0.5rem;
+		color: var(--sl-color-gray-4);
+	}
+
+	.site-footer .meta {
+		margin-top: 0.5rem;
+		color: var(--sl-color-gray-4);
+	}
+</style>

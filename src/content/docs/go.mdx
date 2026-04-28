@@ -15,10 +15,13 @@ go get dappco.re/go@latest
 
 ## Primitives
 
-- **`core.Result`** — `{Value any, OK bool}`. Replaces the `(T, error)` pair.
-- **`core.Options`** — typed key/value bag. The universal input.
-- **`core.Action`** — named, registered, invokable unit of work. The capability map.
-- **`core.Core`** — the fractal root. Every operation hangs off `c := core.New()`.
+| | |
+|---|---|
+| **[Result](/go/result/)** | `{Value any, OK bool}` — replaces the `(T, error)` pair. Constructors: `Ok`, `Fail`, `ResultOf`, `Try`. Unwrap: `Or`, `Must`, `Cast[T]`, `MustCast[T]`. |
+| **[Options](/go/options/)** | Typed key/value bag — the universal input. Accessors: `String`, `Int`, `Bool`, `Float64`, `Duration`. |
+| **[Actions](/go/action/)** | Named, registered, invokable unit of work. Lifecycle (`Enable`/`Disable`), composition (`Task`), background (`PerformAsync`). |
+| **[Errors](/go/error/)** | Structured `*Err` with operation context, stable codes, uniform introspection. Constructors: `E`, `NewError`, `NewCode`, `Wrap`. |
+| **`core.Core`** | The fractal root. Every operation hangs off `c := core.New()`. |
 
 ## Result
 

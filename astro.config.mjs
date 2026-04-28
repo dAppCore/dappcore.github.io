@@ -18,6 +18,9 @@ export default defineConfig({
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/dappcore/go' },
 			],
 			customCss: ['./src/styles/styles.css'],
+			components: {
+				Footer: './src/components/Footer.astro',
+			},
 			head: [
 				// Default go-import / go-source for the umbrella module. Per-package
 				// MDX pages override these in their own `head` frontmatter.
@@ -41,6 +44,10 @@ export default defineConfig({
 					label: 'core/go',
 					items: [
 						{ label: 'Overview', slug: 'go' },
+						{ label: 'Result', slug: 'go/result' },
+						{ label: 'Options', slug: 'go/options' },
+						{ label: 'Actions', slug: 'go/action' },
+						{ label: 'Errors', slug: 'go/error' },
 					],
 				},
 			],

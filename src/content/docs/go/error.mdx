@@ -1,0 +1,91 @@
+---
+title: Errors
+description: Structured errors with operation context, stable codes, and uniform introspection helpers.
+---
+
+`core/go` ships its own structured error type — `*core.Err` — and constructors
+that always return it. Every introspection helper works uniformly across every
+constructor.
+
+```go
+type Err struct {
+    Operation string  // hierarchical operation path: "agent.dispatch.commit"
+    Message   string
+    Cause     error
+    Code      string  // stable error code (see codespace below)
+}
+```
+
+## Construct
+
+| Constructor | Use |
+|---|---|
+| `core.E(op, msg, err)` | The standard structured error. |
+| `core.NewError(text)` | Simple message. Returns `*Err` so introspection works. |
+| `core.NewCode(code, msg)` | Sentinel error with a stable code. |
+| `core.Wrap(err, op, msg)` | Wrap a cause with operation context. Preserves wrapped Code. |
+| `core.WrapCode(err, code, op, msg)` | Wrap with explicit code. |
+
+```go
+return core.E("user.Save", "failed to save", err)
+
+var ErrNotFound = core.NewCode("NOT_FOUND", "resource not found")
+
+return core.Wrap(err, "db.Query", "database query failed")
+```
+
+## Introspect
+
+| Helper | Returns |
+|---|---|
+| `core.Operation(err)` | The operation path (or `""`) |
+| `core.ErrorCode(err)` | The stable code (or `""`) |
+| `core.ErrorMessage(err)` | Just the message (or `""`) |
+| `core.Root(err)` | The deepest cause in the chain |
+| `core.StackTrace(err)` | Operation chain as `[]string` outer→inner |
+| `core.FormatStackTrace(err)` | Same chain rendered as `"outer -> inner"` |
+| `core.AllOperations(err)` | Iterator over each operation in the chain |
+
+## Stdlib bridges
+
+| | |
+|---|---|
+| `core.Is(err, target)` | Wraps `errors.Is` |
+| `core.As(err, &target)` | Wraps `errors.As` |
+| `core.ErrorJoin(...)` | Wraps `errors.Join` |
+
+## Stable code-space
+
+Codes are a flat keyspace agents grep on. Use `Result.Code()` to dispatch:
+
+```go
+switch r.Code() {
+case "fs.notfound":         firstRun()
+case "http.timeout":         retry()
+case "http.refused":         fallback()
+case "json.invalid":         malformedInput()
+case "crypto.algo.unsupported": badAlgoConfig()
+case "action.disabled":      capabilityOff()
+case "action.notentitled":   permissionDenied()
+}
+```
+
+Conventions:
+
+- `<package>.<failure>` — `fs.notfound`, `http.timeout`
+- `<package>.<feature>.<failure>` — `crypto.algo.unsupported`, `agent.token.expired`
+- `action.disabled`, `action.notentitled` — runtime capability gates
+
+The full list lives in [`AGENTS.md` on the repo](https://github.com/dappcore/go/blob/main/AGENTS.md).
+
+## Why one structured shape
+
+`Operation`, `ErrorCode`, `ErrorMessage`, `Root`, `StackTrace`, `As` — every
+helper assumes `*Err`. Because every constructor returns `*Err`, the helpers
+work without hedging. Plain `errors.New` would silently bypass the introspection;
+our `NewError` doesn't.
+
+## Source
+
+[`error.go`](https://github.com/dappcore/go/blob/main/error.go) — type
+definition, constructor set, introspection helpers.

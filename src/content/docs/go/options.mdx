@@ -1,0 +1,77 @@
+---
+title: Options
+description: The universal input type — typed key/value bag every Core operation accepts.
+---
+
+`Options` is the universal input type. Every Core operation that takes parameters
+takes one. A structured collection of key/value pairs with typed accessors.
+
+```go
+type Option struct {
+    Key   string
+    Value any
+}
+
+type Options struct { /* opaque */ }
+```
+
+## Construct
+
+```go
+opts := core.NewOptions(
+    core.Option{Key: "name", Value: "brain"},
+    core.Option{Key: "port", Value: 8080},
+    core.Option{Key: "debug", Value: true},
+)
+```
+
+## Mutate
+
+| Method | What it does |
+|---|---|
+| `opts.Set(key, v)` | Add or update a key. Mutates in place. |
+
+## Read — typed accessors
+
+Each accessor returns the type's zero value when the key is missing or the stored
+value isn't assignable to that type. This is the convenience surface; for strict
+checks use `opts.Get(key)` and inspect the `Result`.
+
+| Accessor | Returns | Zero |
+|---|---|---|
+| `opts.String(key)` | `string` | `""` |
+| `opts.Int(key)` | `int` | `0` |
+| `opts.Bool(key)` | `bool` | `false` |
+| `opts.Float64(key)` | `float64` | `0` (promotes int / int64 / float32) |
+| `opts.Duration(key)` | `core.Duration` | `0` (parses string via `ParseDuration`) |
+
+```go
+name := opts.String("name")
+port := opts.Int("port")
+debug := opts.Bool("debug")
+weight := opts.Float64("weight")
+timeout := opts.Duration("timeout")
+```
+
+## Read — Result-shaped
+
+For strict reads where missing-vs-typed-zero matters:
+
+```go
+r := opts.Get("port")
+if !r.OK { return core.Fail(core.NewError("port required")) }
+port := r.Value.(int)
+```
+
+## Inspect
+
+| Method | What it returns |
+|---|---|
+| `opts.Has(key)` | `true` if the key exists, regardless of value type |
+| `opts.Len()` | Number of options |
+| `opts.Items()` | Copy of the underlying option slice — for iteration |
+
+## Source
+
+[`options.go`](https://github.com/dappcore/go/blob/main/options.go) — full type
+definition, accessor implementations, and docstrings with examples.

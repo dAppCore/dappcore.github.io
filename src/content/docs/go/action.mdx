@@ -1,0 +1,100 @@
+---
+title: Actions
+description: Named, registered, invokable units of work — the capability map of every Core instance.
+---
+
+Actions are the atomic unit of work in `core/go`. Named, registered, invokable,
+inspectable. The Action registry **is** the capability map.
+
+## Register
+
+```go
+c.Action("git.log", func(ctx core.Context, opts core.Options) core.Result {
+    dir := opts.String("dir")
+    return c.Process().RunIn(ctx, dir, "git", "log")
+})
+```
+
+The signature is invariant across every action:
+
+```go
+type ActionHandler func(core.Context, core.Options) core.Result
+```
+
+## Invoke
+
+```go
+r := c.Action("git.log").Run(ctx, core.NewOptions(
+    core.Option{Key: "dir", Value: "/path/to/repo"},
+))
+```
+
+## Lifecycle — Enable / Disable
+
+Actions are enabled at registration. Disable to soft-stop without unregistering:
+
+```go
+c.Action("dangerous.purge").Disable()
+// ...later...
+c.Action("dangerous.purge").Enable()
+
+if c.Action("dangerous.purge").Enabled() { /* will fire */ }
+```
+
+`Run()` on a disabled action returns `Result{OK: false}` with code `"action.disabled"`.
+The capability stays queryable via `Exists()`.
+
+## Inspect
+
+| Method | What it returns |
+|---|---|
+| `c.Action(name).Exists()` | `true` if a handler is registered |
+| `c.Action(name).Enabled()` | `true` if it will run when invoked |
+| `c.Actions()` | All registered action names in registration order |
+
+## Background — `PerformAsync`
+
+For long-running work that shouldn't block the request path:
+
+```go
+r := c.PerformAsync("agentic.dispatch", opts)
+taskID := r.Value.(string)
+// ActionTaskStarted / ActionTaskProgress / ActionTaskCompleted broadcast on IPC
+```
+
+`Progress` updates a running task:
+
+```go
+c.Progress(taskID, 0.5, "halfway done", "agentic.dispatch")
+```
+
+## Composition — Tasks
+
+A `Task` is a named sequence of action steps:
+
+```go
+c.Task("agent.completion", core.Task{
+    Steps: []core.Step{
+        {Action: "agentic.qa"},
+        {Action: "agentic.auto-pr"},
+        {Action: "agentic.verify", Input: "previous"},
+        {Action: "agentic.poke", Async: true},
+    },
+})
+
+r := c.Task("agent.completion").Run(ctx, c, opts)
+```
+
+Sync steps run sequentially — failure stops the chain. Async steps fire-and-forget.
+`Input: "previous"` pipes the last sync step's output as `_input` on the next.
+
+## Why named actions
+
+The registry IS the capability map. Auditable, testable, swappable. Permission
+boundaries (entitlements) and observability (broadcast events) attach at a single
+choke point — `Action.Run` — instead of being threaded through every call site.
+
+## Source
+
+[`action.go`](https://github.com/dappcore/go/blob/main/action.go) — full
+implementation including the panic recovery, entitlement check, and Task runner.

@@ -1,0 +1,85 @@
+---
+title: Result
+description: The universal output type — replaces (T, error) and propagates through every Core operation.
+---
+
+`Result` is the universal output type. Every Core operation returns one. It collapses
+the `(T, error)` pair into a single value with `OK` discrimination.
+
+```go
+type Result struct {
+    Value any
+    OK    bool
+}
+```
+
+## Construct
+
+| Constructor | When to use |
+|---|---|
+| `core.Ok(v)` | Happy path. `Result{Value: v, OK: true}`. |
+| `core.Fail(err)` | Sad path. `Result{Value: err, OK: false}`. |
+| `core.ResultOf(v, err)` | Adapt a stdlib `(T, error)` pair. |
+| `core.Try(fn)` | Wrap a function that may panic; outcome becomes a Result. |
+
+```go
+return core.Ok(parsed)
+
+if err := decode(b); err != nil { return core.Fail(err) }
+
+r := core.ResultOf(os.ReadFile(path))
+if !r.OK { return r }
+data := r.Value.([]byte)
+
+r := core.Try(func() any { return riskyParse(input) })
+```
+
+## Unwrap
+
+| Method | When to use |
+|---|---|
+| `r.OK` | Branch on success. The default check. |
+| `r.Or(fallback)` | Get value or default. Inline read with sane fallback. |
+| `r.Must()` | Panic on failure. Init / test / must-have config only. |
+| `core.Cast[T](r)` | Typed extract `(T, ok)`. Single-expression replaces the assertion dance. |
+| `core.MustCast[T](r)` | Panicking generic variant. Hot config paths. |
+
+```go
+port := opts.Get("port").Or("8080").(string)
+
+cfg := core.MustCast[*Config](core.JSONUnmarshal(data, &Config{}))
+
+if user, ok := core.Cast[*User](svc.Get(id)); ok {
+    use(user)
+}
+```
+
+## Inspect
+
+| Method | What it returns |
+|---|---|
+| `r.Error()` | The error message string when `!r.OK`, otherwise `""`. |
+| `r.Code()` | The stable error code when the failure is a `*core.Err` with `Code` set. |
+
+Codes form a flat keyspace agents grep on:
+
+```go
+switch r.Code() {
+case "fs.notfound":  firstRun()
+case "http.timeout": retry()
+case "http.refused": fallback()
+}
+```
+
+See [Errors](/go/error/) for the stable codespace.
+
+## Why a single shape
+
+Every operation in `core/go` returns `Result`. Every operation in every consumer
+package that builds on `core/go` returns `Result`. Agents reading the codebase
+never have to learn a per-package error idiom — the shape is universal.
+
+## Source
+
+[`result.go`](https://github.com/dappcore/go/blob/main/result.go) — constructors,
+helpers, and full docstrings with copy-pastable examples.
