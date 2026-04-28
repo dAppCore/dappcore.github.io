@@ -1,2 +1,19 @@
 .idea/
 .DS_Store
+
+# Astro
+dist/
+.astro/
+
+# Node
+node_modules/
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+
+# Environment
+.env
+.env.production
+
+# Editor
+*.swp

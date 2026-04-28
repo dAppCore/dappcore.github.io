@@ -1,0 +1,32 @@
+---
+title: dappco.re
+description: Zero-dependency Go primitives for the dappcore ecosystem.
+template: splash
+hero:
+  tagline: Zero-dependency Go primitives for the dappcore ecosystem. Result everywhere, Options for input, Action for capability, Core as the fractal root. Designed to be read by AI agents as easily as humans.
+  actions:
+    - text: Get started — core/go
+      link: /go/
+      icon: right-arrow
+      variant: primary
+    - text: Source on GitHub
+      link: https://github.com/dappcore/go
+      icon: external
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+## What ships today
+
+<CardGrid>
+	<Card title="core/go" icon="rocket">
+		The umbrella primitives package — Result, Options, Action, Core, plus
+		typed wrappers for the Go stdlib. v0.9.0, 95.2% test coverage,
+		zero external dependencies.
+	</Card>
+	<Card title="More — soon" icon="seti:lock">
+		Per-package docs land here one at a time as content stabilises. Today
+		every `dappco.re/<pkg>` URL still resolves for `go get`; only the
+		human-facing docs surface lights up incrementally.
+	</Card>
+</CardGrid>

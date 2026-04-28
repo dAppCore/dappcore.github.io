@@ -1,0 +1,40 @@
+/*
+ * Cruip-flavoured palette overlay for Starlight.
+ *
+ * Starlight uses CSS custom properties for theming — these overrides re-tone
+ * the dark theme to match the Cruip stellar/docs aesthetic (slate-900 base,
+ * purple-500 primary). Light theme mostly inherits Starlight defaults.
+ */
+
+:root {
+	--sl-font-system: 'Aspekta', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+	--sl-font-system-mono: 'PT Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+:root[data-theme='dark'] {
+	/* Backgrounds — slate-900 base, slate-800 for elevated surfaces */
+	--sl-color-bg: #0f172a;          /* slate-900 */
+	--sl-color-bg-nav: #0f172a;
+	--sl-color-bg-sidebar: #0f172a;
+	--sl-color-bg-inline-code: #1e293b; /* slate-800 */
+
+	/* Text — slate-200 primary, slate-400 muted */
+	--sl-color-white: #e2e8f0;       /* slate-200 */
+	--sl-color-gray-1: #cbd5e1;      /* slate-300 */
+	--sl-color-gray-2: #94a3b8;      /* slate-400 */
+	--sl-color-gray-3: #64748b;      /* slate-500 */
+	--sl-color-gray-4: #475569;      /* slate-600 */
+	--sl-color-gray-5: #334155;      /* slate-700 */
+	--sl-color-gray-6: #1e293b;      /* slate-800 */
+
+	/* Accent — purple-500 primary, purple-300 hover */
+	--sl-color-accent: #a855f7;      /* purple-500 */
+	--sl-color-accent-low: #581c87;  /* purple-900 */
+	--sl-color-accent-high: #d8b4fe; /* purple-300 */
+	--sl-color-text-accent: #c084fc; /* purple-400 */
+
+	/* Borders */
+	--sl-color-hairline: #1e293b;    /* slate-800 */
+	--sl-color-hairline-light: #334155; /* slate-700 */
+	--sl-color-hairline-shade: #1e293b;
+}

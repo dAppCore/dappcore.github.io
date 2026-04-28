@@ -1,0 +1,66 @@
+---
+title: core/go
+description: Zero-dependency primitives for the dappcore Go ecosystem — Result, Options, Action, Core.
+---
+
+`dappco.re/go` is the umbrella primitives package. Four universal types form
+the surface every operation flows through. The package has zero external
+dependencies — `go.mod` stays at three lines.
+
+## Install
+
+```sh
+go get dappco.re/go@latest
+```
+
+## Primitives
+
+- **`core.Result`** — `{Value any, OK bool}`. Replaces the `(T, error)` pair.
+- **`core.Options`** — typed key/value bag. The universal input.
+- **`core.Action`** — named, registered, invokable unit of work. The capability map.
+- **`core.Core`** — the fractal root. Every operation hangs off `c := core.New()`.
+
+## Result
+
+Construct, branch, and unwrap without ever touching `error` directly:
+
+```go
+r := core.ResultOf(os.ReadFile(path))   // adapt (T, error)
+if !r.OK { return r }
+data := r.Value.([]byte)
+
+cfg  := core.MustCast[*Config](core.JSONUnmarshal(data, &Config{}))
+port := opts.Get("port").Or("8080").(string)
+```
+
+## Actions
+
+Register a named capability, invoke it by name, check entitlements before firing:
+
+```go
+c.Action("git.log", func(ctx core.Context, opts core.Options) core.Result {
+    return c.Process().RunIn(ctx, opts.String("dir"), "git", "log")
+})
+
+r := c.Action("git.log").Run(ctx, core.NewOptions(
+    core.Option{Key: "dir", Value: "/repo"},
+))
+```
+
+## Design
+
+Every shape decision in `core/go` propagates to ~30 downstream consumer repos.
+The discipline:
+
+- **Predictable names over short names** — agents grep, not autocomplete.
+- **Comments as usage examples** — every public symbol shows a copy-pastable call.
+- **Path is documentation** — folder structure equals API shape.
+- **Universal types** — Result, Options, Action are everywhere; no bespoke pairs.
+- **Lib never imports consumer** — primitives stay zero-dependency.
+
+Full guide: [AGENTS.md](https://github.com/dappcore/go/blob/main/AGENTS.md) in the repo.
+
+## Status
+
+**v0.9.0** — last breaking-change window before the freeze through to **v1.0.0-beta.1**.
+Patch releases (v0.9.x) for fixes only.
