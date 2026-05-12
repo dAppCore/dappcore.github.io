@@ -1,6 +1,6 @@
 ---
 title: ml
-description: Machine-learning runtime — workers, types, training adapters.
+description: Multi-suite scoring engine + agent orchestrator for the Lethean AI stack.
 head:
   - tag: meta
     attrs:
@@ -12,7 +12,13 @@ head:
       content: 'dappco.re/go/ml https://github.com/dappcore/go-ml https://github.com/dappcore/go-ml/tree/main{/dir} https://github.com/dappcore/go-ml/blob/main{/dir}/{file}#L{line}'
 ---
 
-Machine-learning runtime — workers, types, training adapters. Built on the [`core/go`](/go/) primitives.
+The orchestration + evaluation layer above [`go/inference`](/go/inference/).
+Pluggable backends (Apple Metal via [`go/mlx`](/go/mlx/), managed
+llama-server subprocesses, OpenAI-compatible HTTP), a concurrent scoring
+engine that grades model outputs across heuristic / semantic / content /
+standard-benchmark suites, 23 capability probes, GGUF model management,
+and an SSH-based agent orchestrator that streams checkpoint evaluations
+to InfluxDB + DuckDB.
 
 ## Install
 
@@ -26,7 +32,111 @@ go get dappco.re/go/ml@latest
 import "dappco.re/go/ml"
 ```
 
-## Status
+## Backends
 
-Page in flight — content fills in as the package converges. Source of truth
-today is the README and inline docstrings in the repo.
+Three pluggable backend shapes implement the shared `Backend` contract —
+pick the one closest to where your model lives:
+
+```go
+// Apple Silicon, Metal
+adapter := ml.NewInferenceAdapter(metalModel, "gemma-4-e2b")
+
+// Managed llama-server subprocess
+llama := ml.NewLlamaBackend("./model.gguf", ml.WithContextLen(8192))
+
+// Any OpenAI-compatible HTTP endpoint (Ollama, vLLM, hosted APIs)
+http := ml.NewHTTPBackend("http://localhost:11434", "qwen3-8b")
+```
+
+Each backend exposes the same `TextModel` shape — `NewLlamaTextModel`
+and `NewHTTPTextModel` wrap them in the `go/inference` `TextModel`
+interface so they slot directly into the rest of the stack.
+
+## Capability probes
+
+23 standardised probes that measure what a model can actually do — tool
+use, structured output, multi-turn coherence, refusal calibration, code
+synthesis, etc.:
+
+```go
+result := ml.RunCapabilityProbes(ctx, backend)
+fmt.Printf("Score: %.2f (passed %d of %d probes)\n",
+    result.Score, result.Passed, result.Total)
+
+// Full variant emits per-probe response + lets a callback observe each
+// step (useful for live UIs during long runs):
+result, responses := ml.RunCapabilityProbesFull(ctx, backend, func(p ml.Probe, r ml.CapResponseEntry) {
+    log.Printf("[%s] %s — %s", p.ID, p.Title, r.Outcome)
+})
+```
+
+The companion `RunContentProbes` covers content-quality dimensions
+(prose, summary, translation, structured rewrite) on the same shape.
+
+## Scoring + persistence
+
+Probe responses become checkpoint scores via the Judge — a separate
+model graded against rubrics. Results stream to InfluxDB for time-series
+analysis and DuckDB for cross-checkpoint joins:
+
+```go
+judge := ml.NewJudge(ml.JudgeConfig{
+    Backend: ml.NewHTTPBackend("...", "claude-opus-4-7"),
+    Rubric:  "rubric/v1.yaml",
+})
+influx := ml.NewInfluxClient(...)
+
+ml.ScoreCapabilityAndPush(ctx, judge, influx, checkpoint, responses)
+ml.ScoreContentAndPush(ctx, judge, influx, checkpoint, runID, contentResponses)
+```
+
+The DuckDB tables `checkpoint_scores` and `probe_results` come from
+[`go/store`](/go/store/) so any consumer with the Core can join scoring
+data against arbitrary local data.
+
+## Agent orchestrator
+
+`Agent` runs the eval loop end-to-end across a fleet of remote workers
+over SSH — fetch a checkpoint, run probes locally on the worker, ship
+responses back, score, persist, repeat:
+
+```go
+agent := ml.NewAgent(&ml.AgentConfig{
+    Fleet:    []ml.WorkerSpec{ /* SSH targets + GPU specs */ },
+    Backends: []ml.BackendSpec{ /* per-worker backend assignments */ },
+    Cadence:  10 * time.Minute,
+    OnReport: func(report ml.Report) { /* update dashboard */ },
+})
+
+ml.RunAgentLoop(agent.Config())
+```
+
+The orchestrator multiplexes the SSH transport so one local process can
+drive dozens of workers without per-host shell juggling.
+
+## Adapters
+
+`InferenceAdapter` is the bridge that turns a `go/inference` TextModel
+into an `ml.Backend` — useful when you want to point the ml scoring
+engine at any model registered through inference:
+
+```go
+ir := inference.LoadModel(path, inference.WithBackend("metal"))
+model := ir.Value.(inference.TextModel)
+backend := ml.NewInferenceAdapter(model, "gemma-4-e2b")
+
+result := ml.RunCapabilityProbes(ctx, backend)
+```
+
+## Sibling packages
+
+- [`go/inference`](/go/inference/) — the local-backend contract `ml`
+  adapts via `NewInferenceAdapter`
+- [`go/mlx`](/go/mlx/) — Apple Silicon backend, the Metal default
+- [`go/ai`](/go/ai/) — facade above ml when consumers want chat
+  ergonomics rather than scoring infrastructure
+- [`go/store`](/go/store/) — DuckDB scoring tables `ml.Score*AndPush` writes to
+
+## Source
+
+[`github.com/dappcore/go-ml`](https://github.com/dappcore/go-ml) — full source, the 23 probes, the scoring engine, the SSH agent orchestrator.

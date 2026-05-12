@@ -1,6 +1,6 @@
 ---
 title: ai
-description: AI runtime primitives — model adapters, lab, mcp transport.
+description: Unified AI surface — facade, provider router, JSONL metrics, MCP transports.
 head:
   - tag: meta
     attrs:
@@ -12,7 +12,13 @@ head:
       content: 'dappco.re/go/ai https://github.com/dappcore/go-ai https://github.com/dappcore/go-ai/tree/main{/dir} https://github.com/dappcore/go-ai/blob/main{/dir}/{file}#L{line}'
 ---
 
-AI runtime primitives — model adapters, lab, mcp transport. Built on the [`core/go`](/go/) primitives.
+The thin AI facade for everything in the Core ecosystem that needs a
+language model. Sits on top of [`go/inference`](/go/inference/) (local
+backends) and remote providers (OpenAI-compatible HTTP, Anthropic,
+Ollama), then layers in JSONL metrics, RAG query helpers, and an MCP
+transport stack so the same call site talks to whichever shape is closest.
+Built on [`core/go`](/go/) — every constructor returns a
+[`Result`](/go/result/).
 
 ## Install
 
@@ -23,10 +29,103 @@ go get dappco.re/go/ai@latest
 ## Import
 
 ```go
-import "dappco.re/go/ai"
+import "dappco.re/go/ai/ai"   // facade package — common case
 ```
 
-## Status
+The repo is multi-package: `ai/ai/` is the facade, `ai/mcp/` is the MCP
+transport stack, `ai/lab/` is the local lab dashboard, and so on.
 
-Page in flight — content fills in as the package converges. Source of truth
-today is the README and inline docstrings in the repo.
+## Provider router — one call, many backends
+
+`ProviderRouter` is the load-balanced front for a heterogeneous fleet —
+local Metal model alongside a managed llama-server subprocess alongside
+an OpenAI-compatible HTTP endpoint. Routes are declarative; the router
+picks based on declared capability + health:
+
+```go
+r := ai.NewProviderRouter(
+    ai.ProviderRoute{
+        Name:     "local-metal",
+        Provider: ai.ProviderInference,   // go/inference Backend
+        Model:    "gemma-4-e2b",
+        Tags:     []string{"fast", "private"},
+    },
+    ai.ProviderRoute{
+        Name:     "remote-claude",
+        Provider: ai.ProviderAnthropic,
+        Model:    "claude-opus-4-7",
+        Tags:     []string{"frontier"},
+    },
+)
+if !r.OK { return r }
+router := r.Value.(*ai.ProviderRouter)
+
+resp, _ := router.Chat(ctx, ai.ChatRequest{
+    Tags:     []string{"frontier"},   // pick remote-claude
+    Messages: []ai.Message{{Role: "user", Content: "hello"}},
+})
+```
+
+`NewProviderRouterWithOptions` exposes timeout, retry, fallback chain,
+and metrics-sink knobs for production deployments where one route
+flapping shouldn't take the whole router down.
+
+## RAG query helper
+
+`QueryRAGForTask` is the canonical entry for retrieval-augmented prompts
+— give it a `TaskInfo` (title, description, optional code context) and
+get back the assembled context text + provenance to splice into the
+prompt:
+
+```go
+r := ai.QueryRAGForTask(ai.TaskInfo{
+    Title:       "Investigate build failure",
+    Description: "CI compile step fails on go-store after duckdb bump",
+    Sources:     []string{"recent-commits", "rfc-windows-compile"},
+})
+if !r.OK { return r }
+ctx := r.Value.(ai.RAGContext)
+
+prompt := ctx.Render() + "\n\n## Question\n" + question
+```
+
+## MCP transport stack
+
+The `ai/mcp/` sub-package implements the Model Context Protocol with three
+transport flavours so a Core can host MCP tools over whatever shape the
+client supports:
+
+| Transport | Use case |
+|---|---|
+| `mcp/transport_stdio.go` | Sub-process MCP servers (Claude Desktop pattern) |
+| `mcp/transport_tcp.go`   | Remote MCP servers over plain or TLS sockets |
+| `mcp/transport_unix.go`  | Same-host MCP via Unix domain socket |
+
+Each transport exposes the same `Server` / `Client` shapes so consumer
+code is transport-agnostic. The `tools_core.go` + `tools_external.go`
+split lets a Core register both its own tool surface and any external
+tool sets in one MCP server.
+
+## JSONL metrics
+
+Token counts, latency, cost, and routing decisions stream to a JSONL
+file at a configurable path — one line per inference call, append-only,
+no external dependency. The CLI command `ai metrics` consumes the same
+file to render daily roll-ups:
+
+```go
+ai.RegisterMetricsCommand(c, "/var/log/ai/metrics.jsonl")
+```
+
+## Sibling packages
+
+- [`go/inference`](/go/inference/) — the local-backend contract `ai`
+  routes through for on-host models
+- [`go/mlx`](/go/mlx/) — Metal backend that `inference` exposes to `ai`
+- [`go/rag`](/go/rag/) — the RAG corpus + retrieval `QueryRAGForTask` consumes
+- [`go/agent`](/go/agent/) — the agentic runtime that drives `ai` for
+  dispatched coding tasks
+
+## Source
+
+[`github.com/dappcore/go-ai`](https://github.com/dappcore/go-ai) — full source, the facade + MCP + lab + CLI commands.

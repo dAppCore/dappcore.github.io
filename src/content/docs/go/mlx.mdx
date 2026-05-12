@@ -1,6 +1,6 @@
 ---
 title: mlx
-description: Apple MLX bindings — arrays, tokenizers, training, daemon.
+description: Native Apple Metal GPU inference + training via mlx-c CGO.
 head:
   - tag: meta
     attrs:
@@ -12,7 +12,15 @@ head:
       content: 'dappco.re/go/mlx https://github.com/dappcore/go-mlx https://github.com/dappcore/go-mlx/tree/main{/dir} https://github.com/dappcore/go-mlx/blob/main{/dir}/{file}#L{line}'
 ---
 
-Apple MLX bindings — arrays, tokenizers, training, daemon. Built on the [`core/go`](/go/) primitives.
+Native Apple Metal GPU inference and training via mlx-c CGO bindings.
+Implements the [`go/inference`](/go/inference/) `Backend` + `TextModel`
+contracts for Apple Silicon (M1–M4). Supports Gemma 3, Gemma 4 (dense
+and MoE), Qwen 2/3, and Llama 3 from HuggingFace safetensors directories
+and GGUF checkpoints — fused Metal kernels for RMSNorm, RoPE, scaled
+dot-product attention, KV cache management, LoRA fine-tuning with AdamW,
+GRPO, distillation, batch inference. Platform-restricted: `darwin/arm64`
+only; a no-op stub compiles on every other platform so consumers don't
+need build tags.
 
 ## Install
 
@@ -23,10 +31,163 @@ go get dappco.re/go/mlx@latest
 ## Import
 
 ```go
+import (
+    "dappco.re/go/inference"
+    _ "dappco.re/go/mlx"   // blank import registers "metal" backend
+)
+```
+
+Direct API:
+
+```go
 import "dappco.re/go/mlx"
 ```
 
-## Status
+## Two API shapes
 
-Page in flight — content fills in as the package converges. Source of truth
-today is the README and inline docstrings in the repo.
+### Through the inference contract — recommended
+
+The default path is through [`go/inference`](/go/inference/): blank-import
+go-mlx, then call `inference.LoadModel`. The backend registers itself as
+`"metal"` and the auto-select picks it on Apple Silicon:
+
+```go
+r := inference.LoadModel("/path/to/gemma-4-e2b/")
+if !r.OK { return r }
+model := r.Value.(inference.TextModel)
+
+for tok := range model.Generate(ctx, "Hello") {
+    fmt.Print(tok.Text)
+}
+```
+
+### Direct mlx.LoadModel — for advanced cases
+
+Skip the contract layer when you need Metal-specific behaviour the
+generic `TextModel` doesn't expose (KV-cache snapshot/fork, GRPO state,
+explicit memory plan):
+
+```go
+model, err := mlx.LoadModel("/path/to/safetensors/model/")
+if err != nil { return err }
+defer model.Close()
+
+// Stream tokens
+for tok := range model.GenerateStream(ctx, "prompt") {
+    fmt.Print(tok.Text)
+}
+
+// One-shot
+out, _ := model.Generate(ctx, "prompt", mlx.WithMaxTokens(256))
+```
+
+`LoadModelFromMedium` accepts a [`go/io`](/go/io/) `Medium` so models can
+live on remote storage backends without copying to local disk first.
+
+## Sub-packages — pick what you need
+
+go-mlx is intentionally split across many sub-packages so callers depend
+only on what they use. CGO compile time + binary size scales linearly
+with what's actually imported:
+
+| Sub-package | What it covers |
+|---|---|
+| `mlx` (root) | LoadModel, Generate, GenerateStream — the inference façade |
+| `mlx/adapter` | `inference.Backend` implementation (`NewMLXBackend`) |
+| `mlx/compute` | Frame-compute API for non-LLM Metal workloads — `Session`, `PixelBuffer`, RGB565→RGBA8, nearest scale, CRT filter, scanline, soften, sharpen |
+| `mlx/lora` | LoRA fine-tuning with AdamW — `NewLoRA(model, cfg)` |
+| `mlx/agent` | Agent memory + KV-snapshot index for stateful runs |
+| `mlx/gguf` | GGUF checkpoint loader + quantiser (`gguf_quantize`, `gguf_info`) |
+| `mlx/safetensors` | Safetensors I/O primitives |
+| `mlx/pack` | ModelPack types — bundle weights + config + tokenizer |
+| `mlx/merge` | Model merging — average, slerp, ties |
+| `mlx/kv` | KV-cache snapshot, fork, restore |
+| `mlx/memory` | Static memory-plan builder for predictable VRAM usage |
+| `mlx/eval` | Eval Runner — slot into [`go/ml`](/go/ml/) scoring engine |
+| `mlx/bundle` | State-bundle codec — exportable snapshots |
+| `mlx/probe` | Capability probe runner |
+| `mlx/chat` | Chat template formatters per model family |
+| `mlx/mlxlm` | Python subprocess backend — CGO-free fallback |
+| `mlx/openai` | OpenAI-compatible HTTP shim over a local Model |
+
+The split landed during the recent compute-first refactor — see the
+project memory + commit history for the phased lift order (gguf, lora,
+pack, merge, kv, …) that produced this layout.
+
+## Training surfaces
+
+Three training shapes ship today, all on the same Metal kernels:
+
+```go
+// Supervised fine-tuning
+sft := mlx.NewSFT(model, mlx.SFTConfig{
+    Dataset:   "train.jsonl",
+    LR:        2e-5,
+    BatchSize: 4,
+    Epochs:    3,
+})
+result, _ := sft.Run(ctx)
+
+// LoRA fine-tuning (low-rank adapter, no full-weight write)
+lora := mlx.NewLoRA(model, &mlx.LoRAConfig{
+    Rank:    16,
+    Alpha:   32,
+    Targets: []string{"q_proj", "k_proj", "v_proj", "o_proj"},
+})
+lora.Train(ctx, dataset)
+
+// GRPO — preference / reward training
+grpo := mlx.NewGRPO(model, mlx.GRPOConfig{ /* ... */ })
+grpoResult, _ := grpo.Run(ctx)
+mlx.NewGRPOCheckpointMetadata(path, cfg, grpoResult, update)
+
+// Distillation
+distill := mlx.NewDistill(model, teacher, mlx.DistillConfig{ /* ... */ })
+distillResult, _ := distill.Run(ctx)
+```
+
+Every training run writes checkpoint metadata + the canonical adapter
+files; `LoadGRPOCheckpointMetadata` / `LoadDistillCheckpointMetadata` /
+`LoadSFTCheckpointMetadata` re-hydrate them so subsequent loads pick up
+exactly where the run left off.
+
+## Frame compute — beyond LLMs
+
+`mlx/compute` exposes Metal kernels for image and emulator workloads
+that aren't language-model-shaped. Useful when you've already got the
+Metal context open for inference and want to amortise its cost across
+the rest of the pipeline:
+
+```go
+sess, _ := mlx.NewSession()
+defer sess.Close()
+
+frame := sess.BeginFrame()
+frame.Apply(mlx.KernelRGB565ToRGBA8{})
+frame.Apply(mlx.KernelNearestScale{Factor: 2})
+frame.Apply(mlx.KernelCRTFilter{Curve: 0.15})
+out := sess.FinishFrame(frame)
+```
+
+## CGO-free fallback — mlxlm
+
+`mlx/mlxlm` shells out to a Python `mlx-lm` subprocess instead of
+linking mlx-c. Slower, but compiles without the CGO toolchain — useful
+for dev environments where setting up Xcode is friction:
+
+```go
+import "dappco.re/go/mlx/mlxlm"
+
+backend := mlxlm.New("/path/to/python", "/path/to/model")
+```
+
+## Sibling packages
+
+- [`go/inference`](/go/inference/) — the `Backend` contract go-mlx implements
+- [`go/ml`](/go/ml/) — scoring + agent orchestrator that drives mlx for eval
+- [`go/ai`](/go/ai/) — facade that talks to mlx through the inference contract
+- [`go/store`](/go/store/) — DuckDB workspace for training metrics + checkpoint scores
+
+## Source
+
+[`github.com/dappcore/go-mlx`](https://github.com/dappcore/go-mlx) — full source, the mlx-c CGO bindings, every training surface, and the compute API.
