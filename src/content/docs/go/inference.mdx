@@ -1,6 +1,6 @@
 ---
 title: inference
-description: Local inference adapters — Default, LoadModel, LoadTrainable.
+description: Local text generation — the Backend contract every GPU-specific runtime implements.
 head:
   - tag: meta
     attrs:
@@ -12,7 +12,12 @@ head:
       content: 'dappco.re/go/inference https://github.com/dappcore/go-inference https://github.com/dappcore/go-inference/tree/main{/dir} https://github.com/dappcore/go-inference/blob/main{/dir}/{file}#L{line}'
 ---
 
-Local inference adapters — Default, LoadModel, LoadTrainable. Built on the [`core/go`](/go/) primitives.
+The shared contract every text-generation backend implements. `TextModel`
++ `Backend` + `Token` + `Message` are stdlib-only types that compile on
+every platform regardless of GPU availability; GPU-specific runtimes
+(Metal, ROCm, CUDA, …) register themselves at import time. Built on
+[`core/go`](/go/) — `LoadModel` returns a [`Result`](/go/result/), zero
+external dependencies.
 
 ## Install
 
@@ -23,10 +28,154 @@ go get dappco.re/go/inference@latest
 ## Import
 
 ```go
-import "dappco.re/go/inference"
+import (
+    "dappco.re/go/inference"
+
+    // Pick one or more — each blank import registers a backend
+    _ "forge.lthn.ai/core/go-mlx"   // "metal" backend on darwin/arm64
+    // _ "forge.lthn.ai/core/go-rocm"  // "rocm" backend on linux/amd64
+    // _ "forge.lthn.ai/core/go-cuda"  // "cuda" backend on linux/amd64
+)
 ```
 
-## Status
+The base package compiles without any backend; calls fail cleanly with
+`no backend registered` rather than refusing to build. This is what lets
+the same binary target a laptop without a GPU and a Mac Studio without
+two `GOOS` builds.
 
-Page in flight — content fills in as the package converges. Source of truth
-today is the README and inline docstrings in the repo.
+## Quick start
+
+```go
+r := inference.LoadModel("/path/to/safetensors/model/")
+if !r.OK { return r }
+model := r.Value.(inference.TextModel)
+defer model.Close()
+
+for tok := range model.Generate(ctx, "Hello", inference.WithMaxTokens(256)) {
+    fmt.Print(tok.Text)
+}
+```
+
+Backend selection is automatic — the registry picks Metal on Apple
+Silicon, ROCm on Linux+AMD, CUDA on Linux+NVIDIA, in that preferred
+order — but you can pin explicitly:
+
+```go
+r := inference.LoadModel(path, inference.WithBackend("metal"))
+```
+
+`inference.List()` returns the backend names that registered at import
+time, which is useful for runtime config + diagnostics.
+
+## Generate options
+
+Every generation call takes a variadic `GenerateOption`:
+
+| Option | Effect |
+|---|---|
+| `WithMaxTokens(n)` | Cap output length |
+| `WithTemperature(t)` | Sampling temperature (0 = greedy) |
+| `WithTopK(k)` | Restrict sampling to top K logits |
+| `WithTopP(p)` | Nucleus sampling threshold |
+| `WithStopTokens(ids...)` | Halt on any of these token IDs |
+| `WithRepeatPenalty(p)` | Penalise repeated tokens |
+| `WithLogits()` | Emit raw logits per token (for analysis) |
+
+## Load options
+
+`LoadOption` configures the model **at load time** — runtime knobs that
+the backend can't change without reloading:
+
+| Option | Effect |
+|---|---|
+| `WithBackend(name)` | Pin a specific backend instead of auto-select |
+| `WithContextLen(n)` | Override the model's default context length |
+| `WithGPULayers(n)` | How many transformer layers live on GPU vs CPU |
+| `WithParallelSlots(n)` | Number of concurrent generation slots |
+| `WithAdapterPath(path)` | Layer a LoRA adapter over the base model |
+
+## Trainable models
+
+For fine-tuning workflows, `LoadTrainable` returns a model that exposes
+gradients alongside generation:
+
+```go
+r := inference.LoadTrainable(path, inference.WithAdapterPath("lora/"))
+if !r.OK { return r }
+trainable := r.Value.(inference.TrainableModel)
+
+// Same generation surface
+for tok := range trainable.Generate(ctx, "prompt") { /* ... */ }
+
+// Plus the training surface
+trainable.Backward(loss)
+trainable.Step()
+```
+
+Backend support for the trainable path is opt-in — backends that ship
+inference-only will return `not supported`.
+
+## Service registration
+
+The canonical `core/go` Service shape lets a Core instance host an
+inference runtime that every consumer reaches through actions:
+
+```go
+c := core.New(core.Options{})
+
+if r := inference.RegisterCore(c); !r.OK { return r }
+
+// Or with options
+svc := inference.NewService(inference.Options{
+    DefaultBackend: "metal",
+    ModelPath:      "/srv/models/gemma-4-e2b",
+})
+if r := svc(c); !r.OK { return r }
+```
+
+## Probe bus
+
+`NewProbeBus(sinks...)` wires up token-by-token introspection — useful
+for metrics, eval harnesses, or live UIs that show what the model is
+"thinking":
+
+```go
+bus := inference.NewProbeBus(
+    inference.NewTelemetrySink(c),
+    inference.NewLogitSink(eval),
+)
+
+r := inference.LoadModel(path, inference.WithProbeBus(bus))
+```
+
+Each `ProbeSink` receives every token + (optionally) the logits behind
+it. The base package ships the bus + interface; concrete sinks live in
+consumer code.
+
+## Capabilities
+
+Each registered backend declares a `Capability` list that the registry
+exposes for discovery. A consumer can pick a backend based on what it
+supports (training? batched inference? logits? KV-cache snapshots?):
+
+```go
+for _, name := range inference.List() {
+    caps := inference.BackendCaps(name)
+    for _, cap := range caps {
+        fmt.Printf("%s: %s (%s)\n", name, cap.ID, cap.Status)
+    }
+}
+```
+
+## Sibling packages
+
+- [`go/ai`](/go/ai/) — higher-level multi-provider orchestrator built on
+  inference plus remote API clients
+- [`go/mlx`](/go/mlx/) — Apple Silicon Metal backend that registers as
+  `"metal"`
+- [`go/rag`](/go/rag/) — retrieval-augmented pipeline that consumes
+  inference for the generation stage
+
+## Source
+
+[`github.com/dappcore/go-inference`](https://github.com/dappcore/go-inference) — full source, contract tests, and the capability registry.

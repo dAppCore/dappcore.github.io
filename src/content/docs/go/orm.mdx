@@ -1,6 +1,6 @@
 ---
 title: orm
-description: Typed query layer over core/go/store — query builder, repositories, materialised views.
+description: Typed fluent communications bridge — schema, intent, Medium-transported.
 head:
   - tag: meta
     attrs:
@@ -12,8 +12,11 @@ head:
       content: 'dappco.re/go/orm https://github.com/dAppCore/orm https://github.com/dAppCore/orm/tree/main{/dir} https://github.com/dAppCore/orm/blob/main{/dir}/{file}#L{line}'
 ---
 
-Typed query layer over [`core/go/store`](/go/store/) — query builder,
-repositories, materialised views. Built on the [`core/go`](/go/) primitives.
+A typed, fluent communications bridge over backend Media. Callers build
+**intent**; a Medium **transports** it. The same `Schema` declaration
+lands against DuckDB today, Postgres tomorrow, a Borg DataNode next week
+— the bridge is stateless, the backend's capability is what changes.
+Built on [`core/go`](/go/) — every query returns a [`Result`](/go/result/).
 
 ## Install
 
@@ -27,7 +30,147 @@ go get dappco.re/go/orm@latest
 import "dappco.re/go/orm"
 ```
 
-## Status
+## Declare a Schema
 
-Page in flight — content fills in as the package converges. Source of truth
-today is the README and inline docstrings in the repo.
+`orm.Define` collects field declarations into a `Schema` value. Field
+builders are chainable so constraints stay close to the column they
+describe:
+
+```go
+type User struct {
+    ID    int64
+    Name  string
+    Email string
+}
+
+func (User) Schema() orm.Schema {
+    return orm.Define(func(b *orm.Builder) {
+        b.Name("users")
+        b.PK("id")
+        b.String("name").NotNull()
+        b.String("email").Unique()
+    })
+}
+
+type Post struct {
+    ID     int64
+    UserID int64
+    Title  string
+}
+
+func (Post) Schema() orm.Schema {
+    return orm.Define(func(b *orm.Builder) {
+        b.Name("posts")
+        b.PK("id")
+        b.Int64("user_id")
+        b.String("title")
+    })
+}
+```
+
+Schemas are values — pass them around, serialise them to JSON via
+`SchemaFromJSON`, ship them across the polyglot boundary (per RFC §12 the
+same `Schema()` declaration ports across Go, PHP, and TS implementations
+producing identical JSON shape).
+
+## Mount a Medium
+
+A Medium is what carries intent to a real backend. Today: in-memory
+(`NewMemium`), DuckDB (via [`go/store`](/go/store/)), more to follow.
+Mount once on a Core and every Bridge call routes through:
+
+```go
+c := core.New()
+mem := orm.NewMemium()
+orm.Mount(c, "default", mem)
+```
+
+## Query — typed Bridge
+
+`Bridge[T]` is the typed query builder. Construct one from a Schema +
+Core, chain predicates, terminate with a fetch verb that returns
+`core.Result`:
+
+```go
+bridge := orm.From[User](c)
+
+r := bridge.
+    Where("email", "=", "a@b.com").
+    First()
+if !r.OK { return r }
+user := r.Value.(*User)
+
+// Multi-row + ordering + limit
+r := orm.From[Post](c).
+    Where("user_id", "=", user.ID).
+    OrderBy("id", "desc").
+    Limit(10).
+    Get()
+posts := r.Value.([]*Post)
+
+// Aggregates
+r := orm.From[Post](c).Where("user_id", "=", user.ID).Count()
+n := r.Value.(int)
+```
+
+The fluent surface mirrors Eloquent's reading rhythm without dragging in
+Eloquent's machinery. Every predicate, every order, every join is just
+intent in a Go value until the Medium turns it into a backend call.
+
+## Write — Insert, Update, Delete
+
+Writes go through the same Bridge or the package-level helpers:
+
+```go
+// Through the Bridge
+bridge.Insert(&User{Name: "alice", Email: "a@b.com"})
+bridge.Where("id", "=", 42).Update(map[string]any{"name": "renamed"})
+bridge.Where("id", "=", 42).Delete(&User{})
+
+// Package-level — multi-row insert
+orm.Insert(c, &User{Name: "bob"}, &User{Name: "carol"})
+orm.Delete(c, &User{ID: 7})
+```
+
+Every write returns `core.Result` — failures surface the bridge intent
+that didn't transport plus the underlying Medium error, so the call site
+sees what was attempted.
+
+## Joins + relations
+
+`Bridge.From(...)` aliases a related Schema for cross-table predicates;
+`Bridge.With(...)` declares eager-load relations the Medium should
+pre-fetch:
+
+```go
+users := orm.From[User](c).
+    From(orm.A{"posts": Post{}.Schema()}).
+    Where("posts.title", "like", "%golang%").
+    With("posts").
+    Get()
+```
+
+## Predicate grouping
+
+Compound `(A AND (B OR C))` predicates with `WhereGroup`:
+
+```go
+bridge.
+    Where("status", "=", "active").
+    WhereGroup(func(g *orm.Group) {
+        g.Where("role", "=", "admin").
+          OrWhere("role", "=", "owner")
+    }).
+    Get()
+```
+
+## Sibling packages
+
+- [`go/store`](/go/store/) — the persistence layer most orm Mediums route to
+- [`go/io`](/go/io/) — Medium transport contract orm extends
+- [`go/api`](/go/api/) — the polyglot boundary orm Schemas cross at runtime
+
+## Source
+
+[`github.com/dAppCore/orm`](https://github.com/dAppCore/orm) — full source,
+RFC, and the IMPLEMENTATION_PLAN that sequences the Go v1 build.
