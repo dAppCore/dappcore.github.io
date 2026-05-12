@@ -12,7 +12,10 @@ head:
       content: 'dappco.re/go/process https://github.com/dappcore/go-process https://github.com/dappcore/go-process/tree/main{/dir} https://github.com/dappcore/go-process/blob/main{/dir}/{file}#L{line}'
 ---
 
-Process orchestration — exec, daemon, lifecycle, status. Built on the [`core/go`](/go/) primitives.
+Process supervisor primitives — start, stop, signal, wait, restart. The
+same call shape that runs a one-shot exec also drives long-lived daemons
+with health endpoints. Built on [`core/go`](/go/) so every operation
+returns a [`Result`](/go/result/).
 
 ## Install
 
@@ -26,7 +29,109 @@ go get dappco.re/go/process@latest
 import "dappco.re/go/process"
 ```
 
-## Status
+## One-shot exec
 
-Page in flight — content fills in as the package converges. Source of truth
-today is the README and inline docstrings in the repo.
+```go
+r := process.Start(ctx, "git", "rev-parse", "HEAD")
+if !r.OK { return r }
+sha := r.Value.(string)
+```
+
+For more control — environment, working directory, stdout/stderr capture
+— pass `RunOptions`:
+
+```go
+r := process.StartWithOptions(ctx, process.RunOptions{
+    Command: "ffmpeg",
+    Args:    []string{"-i", "in.mov", "out.mp4"},
+    Env:     map[string]string{"PATH": "/usr/local/bin:/usr/bin"},
+    Dir:     "/tmp/encode",
+    Capture: true,
+})
+if !r.OK { return r }
+out := r.Value.(*process.ExecResult)
+fmt.Println(out.Stdout)
+```
+
+## Long-lived daemon
+
+`Daemon` wraps a command with a supervisor loop — restart on exit, ring
+buffer for the last N stdout/stderr lines, optional health endpoint:
+
+```go
+d := process.NewDaemon(process.DaemonOptions{
+    Name:           "indexer",
+    Command:        "/usr/local/bin/indexer",
+    Args:           []string{"--watch", "/srv/data"},
+    RestartPolicy:  process.RestartAlways,
+    RestartBackoff: 5 * time.Second,
+    LogBufferSize:  1024,
+})
+
+if r := d.Start(ctx); !r.OK { return r }
+defer d.Stop(ctx)
+
+// Tail the recent logs at any time
+lines := d.RecentLogs(50)
+```
+
+For HTTP introspection:
+
+```go
+hs := process.NewHealthServer(":7100")
+hs.Attach(d)
+go hs.Listen(ctx)
+
+// GET /health  → JSON daemon status
+// GET /logs    → recent ring-buffer lines
+```
+
+## Service + Registry
+
+A `Registry` tracks every Daemon a Core registered so multi-process
+applications get a single view of who's alive. The Service factory plugs
+the registry directly into the Core lifecycle:
+
+```go
+c := core.New(core.Options{})
+
+svc := process.NewService(process.Options{
+    Dir: "/var/run/myapp",
+})
+
+if r := svc(c); !r.OK { return r }
+
+// Discover registered daemons
+running := process.NewRegistry("/var/run/myapp").List()
+```
+
+## Cross-platform compile
+
+Unix-only `syscall.Kill`, `syscall.SIGKILL`, `SysProcAttr{Setpgid: true}`,
+and `WaitStatus.Signaled()` have all moved behind a small platform-helper
+triplet — `platform.go` declares the shared signatures, `platform_unix.go`
+keeps the original POSIX semantics, and `platform_windows.go` provides
+the equivalent or best-effort behaviour:
+
+| Helper | Unix | Windows |
+|---|---|---|
+| `processSignal(pid, sig)` | `syscall.Kill(pid, sig)` | `os.FindProcess(pid).Signal(sig)` |
+| `processKillGroup(pid)` | `syscall.Kill(-pid, SIGKILL)` | best-effort leader-only kill |
+| `processSignalGroup(pid, sig)` | `syscall.Kill(-pid, sig)` | `Ok(nil)` stub — no Win32 equivalent |
+| `applyProcessGroup(cmd)` | `SysProcAttr{Setpgid: true}` | no-op |
+| `exitWasSignaled(state)` | `WaitStatus.Signaled()` | `false` |
+
+The Service compiles clean for `GOOS=windows GOARCH=amd64` and the smoke
+tests cover both targets. Full process-group semantics on Windows (Job
+Objects) are Phase 2; today's stubs are sufficient for tray-lifecycle
+and supervisor-restart cases.
+
+## Sibling packages
+
+- [`go/io`](/go/io/) — file-system Medium for daemon log persistence
+- [`go/store`](/go/store/) — persisted daemon registry state
+- [`go/log`](/go/log/) — structured logging that daemons emit through
+
+## Source
+
+[`github.com/dappcore/go-process`](https://github.com/dappcore/go-process) — full source, issues, and releases.

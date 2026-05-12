@@ -12,7 +12,10 @@ head:
       content: 'dappco.re/go/io https://github.com/dappcore/go-io https://github.com/dappcore/go-io/tree/main{/dir} https://github.com/dappcore/go-io/blob/main{/dir}/{file}#L{line}'
 ---
 
-Universal IO — Medium transport, datanode, sigil, sqlite, S3. Built on the [`core/go`](/go/) primitives.
+One file-system interface, several backends. The `Medium` contract is what
+every other [`core/go`](/go/) package speaks when it needs to read, write,
+list, or watch a path — and the path is the same regardless of whether the
+storage is local disk, an in-memory mock, or a sandboxed root.
 
 ## Install
 
@@ -26,7 +29,94 @@ go get dappco.re/go/io@latest
 import "dappco.re/go/io"
 ```
 
-## Status
+## The Medium contract
 
-Page in flight — content fills in as the package converges. Source of truth
-today is the README and inline docstrings in the repo.
+```go
+type Medium interface {
+    Read(path string) (string, error)
+    Write(path, content string) error
+    WriteMode(path, content string, mode fs.FileMode) error
+    EnsureDir(path string) error
+    IsFile(path string) bool
+    Delete(path string) error
+    DeleteAll(path string) error
+    Rename(oldPath, newPath string) error
+    List(path string) ([]fs.DirEntry, error)
+    Stat(path string) (fs.FileInfo, error)
+    Open(path string) (fs.File, error)
+    Create(path string) (io.WriteCloser, error)
+}
+```
+
+Every method takes a string path. Permissions, locking, encoding choices —
+all live behind the backend. A consumer writes against `Medium` once and
+swaps backends at construction without code changes.
+
+## Backends
+
+| Backend | Construct | Use case |
+|---|---|---|
+| **Sandboxed local** | `io.NewSandboxed(root)` | Disk-backed with a chroot — paths can never escape `root` |
+| **In-memory** | `io.NewMemoryMedium()` | Ephemeral state, fixtures, fast unit tests |
+| **Mock** | `io.NewMockMedium()` | Tests that need to assert specific call patterns |
+
+```go
+disk, r := io.NewSandboxed("/srv/app")
+if !r.OK { return r }
+
+_ = disk.Write("config/app.yaml", "port: 8080")
+content, _ := disk.Read("config/app.yaml")
+
+// Same code, different backend
+mem := io.NewMemoryMedium()
+_ = mem.Write("config/app.yaml", "port: 8080")
+```
+
+## Copy across backends
+
+`io.Copy` moves payloads between any two Mediums with the same semantics
+regardless of where the bytes physically live:
+
+```go
+local, _  := io.NewSandboxed("/srv/app")
+backup, _ := io.NewSandboxed("/srv/backup")
+
+_ = io.Copy(local, "data/report.json", backup, "daily/report.json")
+```
+
+A unit test can mount a `MemoryMedium` in place of either side and the
+production code path stays unchanged.
+
+## Service registration
+
+The package follows the `core/go` Service pattern — register once on a
+`*core.Core` and every consumer with the Core handle can dispatch IO
+actions through `c.Action("io/...")`:
+
+```go
+c := core.New(core.Options{})
+if r := io.Register(c); !r.OK { return r }
+
+io.RegisterActions(c)  // Adds io/read, io/write, io/list, etc.
+```
+
+## Cross-platform compile
+
+The local backend is portable across Linux, macOS, and Windows. Symbolic
+link handling — historically Unix-only via `syscall.Stat_t` — is now
+abstracted behind `core.Lstat` plus a portable `linkInfo` helper so the
+same file builds clean for `GOOS=windows GOARCH=amd64 CGO_ENABLED=0`.
+See `medium_link.go` for the platform-neutral implementation that ships
+the Windows compile path.
+
+## Sibling packages
+
+- [`go/store`](/go/store/) — KV + workspace persistence; uses Medium when
+  the underlying store lives off-disk
+- [`go/process`](/go/process/) — process supervisor that watches files
+  through Medium
+- [`go/scm`](/go/scm/) — repo-sync actions that fan out across Mediums
+
+## Source
+
+[`github.com/dappcore/go-io`](https://github.com/dappcore/go-io) — full source, issues, and releases.

@@ -12,7 +12,10 @@ head:
       content: 'dappco.re/go/store https://github.com/dappcore/go-store https://github.com/dappcore/go-store/tree/main{/dir} https://github.com/dappcore/go-store/blob/main{/dir}/{file}#L{line}'
 ---
 
-Persistent KV — SQLite + DuckDB, workspace buffer. Built on the [`core/go`](/go/) primitives.
+Two-layer persistence built on the [`core/go`](/go/) primitives. SQLite for
+durable key-value state, DuckDB for analytical and workspace queries — both
+fronted by a single Service so callers get one entry point and one
+[`Result`](/go/result/) shape.
 
 ## Install
 
@@ -26,7 +29,102 @@ go get dappco.re/go/store@latest
 import "dappco.re/go/store"
 ```
 
-## Status
+## Two backends, one Service
 
-Page in flight — content fills in as the package converges. Source of truth
-today is the README and inline docstrings in the repo.
+| Layer  | Backed by | Best for |
+|--------|-----------|----------|
+| **SQLite KV** | `modernc.org/sqlite` (pure Go) | Durable per-key state — config, sessions, cache, scoped namespaces with quotas |
+| **DuckDB workspace** | `marcboeker/go-duckdb` (CGO) | Analytical reads, Parquet import/export, scoring tables, ad-hoc joins over local data |
+
+The Service Register pattern is the canonical entry — register once on a
+`*core.Core` and the store is available through `c.Action("store/...")`.
+
+```go
+c := core.New(core.Options{})
+if r := store.Register(c); !r.OK { return r }
+
+// Now any code with the *core.Core can reach the store.
+```
+
+For per-call construction, the constructors all return `core.Result`:
+
+```go
+// SQLite KV at ~/.local/share/app/state.db
+r := store.New("~/.local/share/app/state.db")
+if !r.OK { return r }
+db := r.Value.(*store.Store)
+
+// DuckDB analytics workspace
+r := store.OpenDuckDB("workspace.duckdb")
+if !r.OK { return r }
+ws := r.Value.(*store.DuckDB)
+```
+
+## Scoped namespaces
+
+Cluster a slice of the KV under a namespace so one application can hand
+sub-namespaces to its modules without leaking keys:
+
+```go
+sessions := store.NewScoped(db, "sessions")
+sessions.Set("user-42", payload)   // stored at sessions/user-42 internally
+
+// With quota
+sub, r := store.NewScopedWithQuota(db, "uploads", store.QuotaConfig{
+    MaxKeys:  1000,
+    MaxBytes: 50 << 20, // 50 MiB
+})
+if !r.OK { return r }
+```
+
+## Analytical layer — DuckDB
+
+The DuckDB side ships canonical table names + helpers for the most common
+patterns:
+
+```go
+const (
+    TableCheckpointScores = "checkpoint_scores"
+    TableProbeResults     = "probe_results"
+)
+
+_ = ws.EnsureScoringTables()
+ws.Exec(core.Sprintf("SELECT * FROM %s WHERE score > ?", TableCheckpointScores), 0.8)
+```
+
+Parquet round-trip helpers cover the most common ETL shapes:
+
+```go
+r := store.ExportParquet(ws, "scores.parquet", "checkpoint_scores")
+if !r.OK { return r }
+rows := r.Value.(int)
+
+// Sharded export — splits by column value, writes one Parquet per shard.
+store.ExportSplitParquet(ws, "shards/", "probe_results", "model_id")
+```
+
+## Cross-platform compile
+
+SQLite is pure Go and compiles on every target with no special flags. The
+DuckDB layer is CGO and follows the same pattern as the rest of the
+[`core/go`](/go/) ecosystem — Windows support is live for `amd64` with a
+C toolchain (native `mingw` or the Wails `wails-cross` Docker image with
+Zig). The `windows/arm64` target requires the same toolchain via
+`CGO_ENABLED=1`.
+
+`marcboeker/go-duckdb` is the active driver path; `mapping`/`bindings`
+sub-modules are kept transitively. See [RFC.md](https://github.com/dappcore/go-store/blob/dev/RFC.md)
+for the current Windows compile checklist and consumer-side build flags.
+
+## Sibling packages
+
+- [`go/io`](/go/io/) — universal `Medium` transport that store consumes
+  when persistence lives on remote backends (S3, cube)
+- [`go/process`](/go/process/) — supervisor primitives that own the
+  process running the store
+- [`go/orm`](/go/orm/) — the typed query layer that fronts both backends
+  when consumers want models instead of raw SQL
+
+## Source
+
+[`github.com/dappcore/go-store`](https://github.com/dappcore/go-store) — full source, issues, and releases.
