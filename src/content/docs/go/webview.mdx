@@ -1,6 +1,6 @@
 ---
 title: webview
-description: WebView runtime — bridge, codegen, transport.
+description: Chrome DevTools Protocol client — browser automation, testing, scraping.
 head:
   - tag: meta
     attrs:
@@ -12,7 +12,13 @@ head:
       content: 'dappco.re/go/webview https://github.com/dappcore/go-webview https://github.com/dappcore/go-webview/tree/main{/dir} https://github.com/dappcore/go-webview/blob/main{/dir}/{file}#L{line}'
 ---
 
-WebView runtime — bridge, codegen, transport. Built on the [`core/go`](/go/) primitives.
+Chrome DevTools Protocol client for browser automation. Connects to an
+externally managed Chrome or Chromium instance running with
+`--remote-debugging-port=9222` and gives you navigation, DOM queries, click
++ type actions, console capture, JavaScript evaluation, screenshots,
+multi-tab support, viewport emulation, and a fluent `ActionSequence`
+builder. Built on [`core/go`](/go/) — every constructor returns a
+[`Result`](/go/result/).
 
 ## Install
 
@@ -26,7 +32,139 @@ go get dappco.re/go/webview@latest
 import "dappco.re/go/webview"
 ```
 
-## Status
+## Quick start
 
-Page in flight — content fills in as the package converges. Source of truth
-today is the README and inline docstrings in the repo.
+Launch Chrome with the remote debugging port open, then point a Webview
+at it:
+
+```bash
+chrome --remote-debugging-port=9222 --user-data-dir=/tmp/cdp-profile
+```
+
+```go
+r := webview.New(webview.WithDebugURL("http://localhost:9222"))
+if !r.OK { return r }
+wv := r.Value.(*webview.Webview)
+defer wv.Close()
+
+wv.Navigate("https://example.com")
+wv.Click("#submit")
+wv.Type("#input", "search term")
+
+png, _ := wv.Screenshot()
+```
+
+## ActionSequence — fluent chain
+
+For test scripts and scrape recipes, `ActionSequence` strings calls together
+and short-circuits on first failure:
+
+```go
+seq := webview.NewActionSequence()
+
+r := seq.
+    Navigate("https://example.com/login").
+    Type("#username", "alice").
+    Type("#password", "s3cret").
+    Click("button[type=submit]").
+    WaitFor("#dashboard").
+    Screenshot("dashboard.png").
+    Run(wv)
+
+if !r.OK { return r }
+```
+
+Each step records its outcome so a failed sequence reports the exact step
+that broke rather than a generic "automation failed".
+
+## Watchers
+
+Two background watchers attach to a `*Webview` and stream
+async-but-relevant events without polling:
+
+```go
+con := webview.NewConsoleWatcher(wv)
+con.Start(ctx)
+go func() {
+    for msg := range con.Messages() {
+        log.Printf("[%s] %s", msg.Level, msg.Text)
+    }
+}()
+
+ex := webview.NewExceptionWatcher(wv)
+ex.Start(ctx)
+go func() {
+    for e := range ex.Exceptions() {
+        log.Printf("page exception: %v", e)
+    }
+}()
+```
+
+Useful for catching JS errors during smoke tests, or capturing
+`console.log` output from instrumented frontends.
+
+## Angular helpers
+
+When the page is an Angular app, `AngularHelper` wires in the framework's
+internals so tests can wait for Zone.js stability, drive the router, and
+read component state directly:
+
+```go
+ng := webview.NewAngularHelper(wv)
+
+ng.WaitForStability(ctx)            // Zone.js settled
+ng.NavigateByUrl("/dashboard")      // ng router
+ng.SetNgModel("input#email", "a@b") // bypass typing
+val, _ := ng.GetComponentField("AppComponent", "user.id")
+```
+
+Skips race conditions that vanilla CDP tests hit when the framework's
+microtasks haven't drained yet.
+
+## Service registration
+
+The package ships the canonical `core/go` Service pattern:
+
+```go
+c := core.New(core.Options{})
+
+if r := webview.Register(c); !r.OK { return r }
+
+// Or with explicit options
+svc := webview.NewService(webview.ServiceOptions{
+    DebugURL: "http://localhost:9222",
+})
+if r := svc(c); !r.OK { return r }
+```
+
+Consumers reach the Webview through `c.Action("webview/...")` so a test
+binary, a scrape worker, and a CI dispatcher all share one entry point.
+
+## Low-level CDP client
+
+If you need to send raw CDP commands, `NewCDPClient` exposes the protocol
+directly without the high-level wrapper:
+
+```go
+r := webview.NewCDPClient("http://localhost:9222")
+if !r.OK { return r }
+cdp := r.Value.(*webview.CDPClient)
+
+cdp.Send("Network.enable", nil)
+cdp.Send("Page.navigate", map[string]any{"url": "https://example.com"})
+```
+
+The high-level `Webview` is built on top of this client, so anything it
+does, you can do too.
+
+## Sibling packages
+
+- [`go/process`](/go/process/) — supervise the Chrome process that
+  Webview connects to
+- [`go/io`](/go/io/) — persist screenshots, scraped payloads
+- [`go/forge`](/go/forge/) — the same Result-returning Service shape for
+  the Forgejo HTTP client
+
+## Source
+
+[`github.com/dappcore/go-webview`](https://github.com/dappcore/go-webview) — full source, issues, and releases.

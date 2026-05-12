@@ -12,7 +12,11 @@ head:
       content: 'dappco.re/go/forge https://github.com/dappcore/go-forge https://github.com/dappcore/go-forge/tree/main{/dir} https://github.com/dappcore/go-forge/blob/main{/dir}/{file}#L{line}'
 ---
 
-Forgejo client — repo, branch, hook, runner orchestration. Built on the [`core/go`](/go/) primitives.
+Typed HTTP client for Forgejo (and Gitea) — repos, branches, issues, pull
+requests, hooks, runners. Generic `Resource[T, C, U]` and paginated
+helpers cover the long tail of CRUD shapes without hand-writing each
+endpoint. Built on [`core/go`](/go/) — every constructor that touches
+config returns a [`Result`](/go/result/).
 
 ## Install
 
@@ -26,7 +30,100 @@ go get dappco.re/go/forge@latest
 import "dappco.re/go/forge"
 ```
 
-## Status
+## Quick start
 
-Page in flight — content fills in as the package converges. Source of truth
-today is the README and inline docstrings in the repo.
+Two constructors — explicit URL+token or auto-pulled from config flags:
+
+```go
+// Explicit
+fg := forge.NewForge("https://forge.lthn.sh", os.Getenv("FORGEJO_TOKEN"))
+
+// Config-driven (flags first, env fallback)
+r := forge.NewForgeFromConfig("--forge-url", "--forge-token")
+if !r.OK { return r }
+fg := r.Value.(*forge.Forge)
+```
+
+`Forge` wraps a `*Client` plus typed Resource handles for every standard
+endpoint group. Direct HTTP access stays available via `fg.Client()` for
+calls the typed surface doesn't cover yet.
+
+## Generic resources
+
+`Resource[T, C, U]` parameterises CRUD over three types — the read shape,
+the create shape, and the update shape. The package exports pre-bound
+resources for the common Forgejo objects (repos, issues, PRs, hooks,
+runners, …); custom integrations can spin their own:
+
+```go
+type MyKind struct { ID int; Name string }
+type CreateMyKind struct { Name string }
+type UpdateMyKind struct { Name *string }
+
+r := forge.NewResource[MyKind, CreateMyKind, UpdateMyKind](
+    fg.Client(),
+    "/api/v1/orgs/{org}/my-kinds",
+)
+
+items, _ := r.List(ctx, map[string]string{"org": "dappcore"})
+created, _ := r.Create(ctx, CreateMyKind{Name: "shiny"})
+```
+
+## Pagination — three shapes, one signature
+
+Forgejo paginates everything. The helpers give callers a choice of memory
+profile:
+
+```go
+// One page at a time — caller drives the loop
+page, _ := forge.ListPage[Repo](ctx, fg.Client(), "/repos/search", q, forge.ListOptions{
+    Page:    1,
+    PerPage: 50,
+})
+
+// All pages collected — slurp into memory
+all, _ := forge.ListAll[Repo](ctx, fg.Client(), "/repos/search", q)
+
+// Streaming iterator — Go 1.23+ range-over-func
+for repo, err := range forge.ListIter[Repo](ctx, fg.Client(), "/repos/search", q) {
+    if err != nil { return err }
+    fmt.Println(repo.FullName)
+}
+```
+
+`ListIter` is the right default for long results — it fetches pages on
+demand without holding the whole set in memory.
+
+## Service registration
+
+The canonical `core/go` Service pattern — register once on a Core and
+every consumer reaches Forgejo through `c.Action("forge/...")`:
+
+```go
+c := core.New(core.Options{})
+
+if r := forge.Register(c); !r.OK { return r }
+
+// With options
+svc := forge.NewService(forge.ServiceOptions{
+    URL:   "https://forge.lthn.sh",
+    Token: os.Getenv("FORGEJO_TOKEN"),
+})
+if r := svc(c); !r.OK { return r }
+```
+
+The Service constructor reads config + env in the same order as
+`NewForgeFromConfig` so a single Core instance has one consistent Forge
+binding.
+
+## Sibling packages
+
+- [`go/scm`](/go/scm/) — Git operations on the repos forge serves
+- [`go/process`](/go/process/) — supervise long-running runners forge
+  dispatches
+- [`go/webview`](/go/webview/) — the same Result-returning Service shape
+  for browser automation
+
+## Source
+
+[`github.com/dappcore/go-forge`](https://github.com/dappcore/go-forge) — full source, issues, and releases.
