@@ -1,0 +1,336 @@
+---
+// SPDX-Licence-Identifier: EUPL-1.2
+
+// SDKGrid — landing-page tile grid for the @lthn/sdk-* family.
+//
+// Renders one tile per language, each linking directly to its
+// LetheanNetwork/sdk-<id> repo. Languages with multiple flavours
+// (TS has 10, JS has 4, C++ has 2, Dart has 2) show a "+ N more"
+// chip under the title pointing at the other repos.
+//
+// Icons come from cdn.simpleicons.org — MIT-licensed brand SVGs
+// covering every language we ship. CDN means no asset bundling +
+// always-current artwork. Falls back to the language label if the
+// CDN is unreachable (the alt text carries it).
+//
+// Once the npm / cargo / pip / etc. registry uploads are wired,
+// flip `href` on each tile to its registry URL; for now everything
+// points at the source repo.
+
+interface Flavour {
+  id: string;
+  label: string;
+}
+
+interface SDK {
+  /** Canonical sdk-<id> repo this tile links to. */
+  id: string;
+  /** Display label on the tile. */
+  label: string;
+  /** simple-icons slug (https://simpleicons.org). */
+  iconSlug: string;
+  /** Hex colour for the icon (no leading #). */
+  colour: string;
+  /** Other flavours in the same language — rendered as a chip. */
+  alts?: Flavour[];
+  /** Short caption shown under the language name. */
+  blurb?: string;
+}
+
+const tiers: { name: string; items: SDK[] }[] = [
+  {
+    name: 'Web & Node',
+    items: [
+      {
+        id: 'typescript-fetch',
+        label: 'TypeScript',
+        iconSlug: 'typescript',
+        colour: '3178C6',
+        blurb: 'zero-dep fetch() · 10 flavours',
+        alts: [
+          { id: 'typescript-axios', label: 'axios' },
+          { id: 'typescript', label: 'generic' },
+          { id: 'typescript-angular', label: 'angular' },
+          { id: 'typescript-rxjs', label: 'rxjs' },
+          { id: 'typescript-node', label: 'node' },
+          { id: 'typescript-redux-query', label: 'redux-query' },
+          { id: 'typescript-inversify', label: 'inversify' },
+          { id: 'typescript-aurelia', label: 'aurelia' },
+          { id: 'typescript-jquery', label: 'jquery' },
+        ],
+      },
+      {
+        id: 'javascript',
+        label: 'JavaScript',
+        iconSlug: 'javascript',
+        colour: 'F7DF1E',
+        blurb: 'plain ES6 · 4 flavours',
+        alts: [
+          { id: 'javascript-flowtyped', label: 'flow' },
+          { id: 'javascript-closure-angular', label: 'closure-angular' },
+          { id: 'javascript-apollo', label: 'apollo' },
+        ],
+      },
+    ],
+  },
+  {
+    name: 'Mobile & Desktop',
+    items: [
+      {
+        id: 'swift5',
+        label: 'Swift',
+        iconSlug: 'swift',
+        colour: 'F05138',
+        blurb: 'iOS · macOS · SwiftUI',
+      },
+      {
+        id: 'kotlin',
+        label: 'Kotlin',
+        iconSlug: 'kotlin',
+        colour: '7F52FF',
+        blurb: 'Android · JVM',
+      },
+      {
+        id: 'objc',
+        label: 'Objective-C',
+        iconSlug: 'apple',
+        colour: 'A2AAAD',
+        blurb: 'Cocoa · iOS legacy',
+      },
+      {
+        id: 'dart-dio',
+        label: 'Dart',
+        iconSlug: 'dart',
+        colour: '0175C2',
+        blurb: 'Flutter · Dio · 2 flavours',
+        alts: [{ id: 'dart', label: 'basic' }],
+      },
+    ],
+  },
+  {
+    name: 'Native & systems',
+    items: [
+      {
+        id: 'c',
+        label: 'C',
+        iconSlug: 'c',
+        colour: 'A8B9CC',
+        blurb: 'libcurl · ANSI C',
+      },
+      {
+        id: 'cpp-restsdk',
+        label: 'C++',
+        iconSlug: 'cplusplus',
+        colour: '00599C',
+        blurb: 'cpprestsdk · 2 flavours',
+        alts: [{ id: 'cpp-qt', label: 'qt' }],
+      },
+      {
+        id: 'rust',
+        label: 'Rust',
+        iconSlug: 'rust',
+        colour: '000000',
+        blurb: 'reqwest async',
+      },
+    ],
+  },
+  {
+    name: 'Server & scripting',
+    items: [
+      {
+        id: 'csharp',
+        label: 'C# / .NET',
+        iconSlug: 'dotnet',
+        colour: '512BD4',
+        blurb: 'net8 · net6 · net47 · net48',
+      },
+      {
+        id: 'python',
+        label: 'Python',
+        iconSlug: 'python',
+        colour: '3776AB',
+        blurb: 'urllib3-based',
+      },
+      {
+        id: 'php',
+        label: 'PHP',
+        iconSlug: 'php',
+        colour: '777BB4',
+        blurb: 'Guzzle-based',
+      },
+      {
+        id: 'clojure',
+        label: 'Clojure',
+        iconSlug: 'clojure',
+        colour: '5881D8',
+        blurb: 'JVM functional',
+      },
+    ],
+  },
+];
+
+const totalRepos = tiers.reduce(
+  (sum, tier) => sum + tier.items.reduce((s, sdk) => s + 1 + (sdk.alts?.length ?? 0), 0),
+  0,
+);
+const totalLanguages = tiers.reduce((sum, tier) => sum + tier.items.length, 0);
+---
+
+<section class="sdk-grid">
+  <header class="sdk-grid__header">
+    <h2>SDKs — every language, one OpenAPI spec</h2>
+    <p>
+      {totalRepos} client flavours across {totalLanguages} languages, all
+      generated from the same <code>build/sdk/openapi.yaml</code>. Each
+      tile links to its <a href="https://github.com/LetheanNetwork">LetheanNetwork</a>
+      source repo. npm / pip / cargo / NuGet / CocoaPods registry uploads
+      land next.
+    </p>
+  </header>
+
+  {
+    tiers.map((tier) => (
+      <div class="sdk-grid__tier">
+        <h3>{tier.name}</h3>
+        <ul class="sdk-grid__tiles">
+          {tier.items.map((sdk) => (
+            <li>
+              <a
+                class="sdk-tile"
+                href={`https://github.com/LetheanNetwork/sdk-${sdk.id}`}
+                style={`--icon-colour:#${sdk.colour}`}
+              >
+                <span class="sdk-tile__icon">
+                  <img
+                    src={`https://cdn.simpleicons.org/${sdk.iconSlug}/${sdk.colour}`}
+                    alt={`${sdk.label} logo`}
+                    width="32"
+                    height="32"
+                    loading="lazy"
+                  />
+                </span>
+                <span class="sdk-tile__body">
+                  <span class="sdk-tile__title">{sdk.label}</span>
+                  {sdk.blurb && <span class="sdk-tile__blurb">{sdk.blurb}</span>}
+                  {sdk.alts && sdk.alts.length > 0 && (
+                    <span class="sdk-tile__alts">
+                      {sdk.alts.map((alt, i) => (
+                        <>
+                          {i > 0 && <span class="sdk-tile__alts-sep"> · </span>}
+                          <a
+                            href={`https://github.com/LetheanNetwork/sdk-${alt.id}`}
+                            onclick="event.stopPropagation()"
+                          >
+                            {alt.label}
+                          </a>
+                        </>
+                      ))}
+                    </span>
+                  )}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))
+  }
+</section>
+
+<style>
+  .sdk-grid {
+    margin: 2.5rem 0;
+  }
+  .sdk-grid__header {
+    margin-bottom: 1.5rem;
+  }
+  .sdk-grid__header h2 {
+    margin-bottom: 0.5rem;
+  }
+  .sdk-grid__header p {
+    color: var(--sl-color-gray-2);
+    font-size: 0.95rem;
+    max-width: 60ch;
+  }
+  .sdk-grid__tier {
+    margin-top: 2rem;
+  }
+  .sdk-grid__tier h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--sl-color-gray-3);
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+  .sdk-grid__tiles {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 0.75rem;
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+  .sdk-tile {
+    display: flex;
+    align-items: center;
+    gap: 0.875rem;
+    padding: 0.875rem 1rem;
+    background: var(--sl-color-bg-inline-code);
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: border-color 0.15s, transform 0.15s;
+  }
+  .sdk-tile:hover {
+    border-color: var(--icon-colour, var(--sl-color-accent));
+    transform: translateY(-1px);
+  }
+  .sdk-tile__icon {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .sdk-tile__icon img {
+    width: 32px;
+    height: 32px;
+  }
+  .sdk-tile__body {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .sdk-tile__title {
+    font-weight: 600;
+    color: var(--sl-color-white);
+    font-size: 0.95rem;
+  }
+  .sdk-tile__blurb {
+    color: var(--sl-color-gray-2);
+    font-size: 0.75rem;
+    line-height: 1.4;
+  }
+  .sdk-tile__alts {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-top: 4px;
+    font-size: 0.72rem;
+    color: var(--sl-color-gray-3);
+  }
+  .sdk-tile__alts a {
+    color: var(--sl-color-text-accent);
+    text-decoration: none;
+  }
+  .sdk-tile__alts a:hover {
+    text-decoration: underline;
+  }
+  .sdk-tile__alts-sep {
+    color: var(--sl-color-gray-4);
+  }
+</style>
