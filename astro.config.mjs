@@ -2,18 +2,18 @@
 import { defineConfig } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
-// dappco.re — docs for the dappcore Go ecosystem.
+// core.help — docs for the Core Go framework (formerly at dappco.re).
 //
-// Static site, served at https://dappco.re/. Existing per-package go-get
+// Static site, served at https://core.help/. Existing per-package go-get
 // redirect HTML lives in `public/<pkg>/index.html` and is served untouched;
 // Starlight content under `src/content/docs/` overrides any matching path
 // once written. Migration is one package at a time.
 export default defineConfig({
-	site: 'https://dappco.re',
+	site: 'https://core.help',
 	integrations: [
 		starlight({
-			title: 'dappco.re',
-			description: 'Zero-dependency Go primitives for the dappcore ecosystem.',
+			title: 'Core',
+			description: 'Zero-dependency Go primitives for the Core framework.',
 			social: [
 				{ icon: 'github', label: 'GitHub', href: 'https://github.com/dappcore/go' },
 			],
