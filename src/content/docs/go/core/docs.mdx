@@ -1,0 +1,33 @@
+---
+title: core/docs
+description: Documentation catalog, ingest, search, and render engine.
+head:
+  - tag: meta
+    attrs:
+      name: go-import
+      content: 'dappco.re/go/core/docs git https://github.com/dappcore/docs.git go'
+  - tag: meta
+    attrs:
+      name: go-source
+      content: 'dappco.re/go/core/docs https://github.com/dappcore/docs https://github.com/dappcore/docs/tree/main/go{/dir} https://github.com/dappcore/docs/blob/main/go{/dir}/{file}#L{line}'
+---
+
+The documentation engine behind the Core help system — catalog, ingest,
+parse, render, and full-text search over the framework's package docs.
+The `pkg/help` subpackage is what the `core` CLI embeds to serve `core help`.
+
+## Install
+
+```sh
+go get dappco.re/go/core/docs@latest
+```
+
+## Import
+
+```go
+import "dappco.re/go/core/docs/pkg/help"
+```
+
+## Source
+
+[`github.com/dappcore/docs`](https://github.com/dappcore/docs) — full source, issues, and releases.

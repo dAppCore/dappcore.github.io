@@ -85,6 +85,7 @@ export default defineConfig({
 						{ label: 'ansible', slug: 'go/ansible' },
 						{ label: 'api', slug: 'go/api' },
 						{ label: 'build', slug: 'go/build' },
+						{ label: 'cache', slug: 'go/cache' },
 						{ label: 'cgo', slug: 'go/cgo' },
 						{ label: 'cli', slug: 'go/cli' },
 						{ label: 'config', slug: 'go/config' },

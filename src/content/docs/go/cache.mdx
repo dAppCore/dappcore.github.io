@@ -1,0 +1,53 @@
+---
+title: cache
+description: Storage-agnostic JSON cache backed by any io.Medium.
+head:
+  - tag: meta
+    attrs:
+      name: go-import
+      content: 'dappco.re/go/cache git https://github.com/dappcore/go-cache.git go'
+  - tag: meta
+    attrs:
+      name: go-source
+      content: 'dappco.re/go/cache https://github.com/dappcore/go-cache https://github.com/dappcore/go-cache/tree/main/go{/dir} https://github.com/dappcore/go-cache/blob/main/go{/dir}/{file}#L{line}'
+---
+
+A storage-agnostic, JSON-based cache backed by any [`go/io`](/go/io/)
+`Medium` — local disk, in-memory, or a sandboxed root — so the same cache
+code runs against real storage in production and an ephemeral mock in tests.
+
+## Install
+
+```sh
+go get dappco.re/go/cache@latest
+```
+
+## Import
+
+```go
+import "dappco.re/go/cache"
+```
+
+## Construct
+
+Build a cache over any `io.Medium`:
+
+```go
+r := cache.NewCacheStorage(medium, "cache")
+if !r.OK { return r }
+```
+
+Or register it as a `core/go` service on a `*core.Core`:
+
+```go
+if r := cache.NewService(cfg)(c); !r.OK { return r }
+```
+
+## Sibling packages
+
+- [`go/io`](/go/io/) — the `Medium` contract the cache is backed by
+- [`go/store`](/go/store/) — KV + workspace persistence
+
+## Source
+
+[`github.com/dappcore/go-cache`](https://github.com/dappcore/go-cache) — full source, issues, and releases.
