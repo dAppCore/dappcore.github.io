@@ -1,0 +1,34 @@
+---
+title: update
+description: Self-update primitives — GitHub release channels (stable/beta/alpha/dev), semver comparison, binary swap.
+head:
+  - tag: meta
+    attrs:
+      name: go-import
+      content: 'dappco.re/go/update git https://github.com/dappcore/go-update.git go'
+  - tag: meta
+    attrs:
+      name: go-source
+      content: 'dappco.re/go/update https://github.com/dappcore/go-update https://github.com/dappcore/go-update/tree/main/go{/dir} https://github.com/dappcore/go-update/blob/main/go{/dir}/{file}#L{line}'
+---
+
+Self-update primitives — GitHub release discovery with stability channels
+(stable/beta/alpha/dev), smart semver comparison, and in-place binary swap
+with a restart watcher. Built on the [`core/go`](/go/) primitives.
+
+## Install
+
+```sh
+go get dappco.re/go/update@latest
+```
+
+## Import
+
+```go
+import updater "dappco.re/go/update"
+```
+
+## Status
+
+Page in flight — content fills in as the package converges. Source of truth
+today is the README and inline docstrings in the repo.
