@@ -1,0 +1,34 @@
+---
+title: ts
+description: CoreTS — the TypeScript branch: a sandboxed Deno runtime service for the Core framework.
+head:
+  - tag: meta
+    attrs:
+      name: go-import
+      content: 'dappco.re/go/ts git https://github.com/dappcore/ts.git go'
+  - tag: meta
+    attrs:
+      name: go-source
+      content: 'dappco.re/go/ts https://github.com/dappcore/ts https://github.com/dappcore/ts/tree/main/go{/dir} https://github.com/dappcore/ts/blob/main/go{/dir}/{file}#L{line}'
+---
+
+CoreTS — the TypeScript branch of the Core framework. The Go side (`dappco.re/go/ts`) is a
+CoreGo service that orchestrates a sandboxed **Deno** runtime (gRPC + subprocess, a
+permission model) to run TS modules securely. Shared APIs across the Go and TS branches.
+
+## Install
+
+```sh
+go get dappco.re/go/ts@latest
+```
+
+## Import
+
+```go
+import "dappco.re/go/ts"
+```
+
+## Status
+
+Page in flight — the module is at `go/v0.2.1` (early). Source of truth is the RFC and the
+inline docstrings in the repo.
