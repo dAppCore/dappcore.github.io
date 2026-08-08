@@ -1,0 +1,23 @@
+---
+title: php
+description: PHP toolchain integration — workspace detection, execution, tooling.
+head:
+  - tag: meta
+    attrs:
+      name: go-import
+      content: 'dappco.re/go/php git https://github.com/dappcore/php.git go'
+  - tag: meta
+    attrs:
+      name: go-source
+      content: 'dappco.re/go/php https://github.com/dappcore/php https://github.com/dappcore/php/tree/main/go{/dir} https://github.com/dappcore/php/blob/main/go{/dir}/{file}#L{line}'
+---
+
+PHP toolchain integration — locate and drive a PHP runtime from Go:
+workspace detection, composer awareness, script execution. Built on
+[`core/go`](/go/) so every operation returns a [`Result`](/go/result/).
+
+## Install
+
+```sh
+go get dappco.re/go/php
+```
