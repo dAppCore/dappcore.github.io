@@ -1,15 +1,6 @@
 ---
 title: ansible
 description: Ansible parser, executor, and inventory model.
-head:
-  - tag: meta
-    attrs:
-      name: go-import
-      content: 'dappco.re/go/ansible git https://github.com/dappcore/go-ansible.git go'
-  - tag: meta
-    attrs:
-      name: go-source
-      content: 'dappco.re/go/ansible https://github.com/dappcore/go-ansible https://github.com/dappcore/go-ansible/tree/main/go{/dir} https://github.com/dappcore/go-ansible/blob/main/go{/dir}/{file}#L{line}'
 ---
 
 Ansible parser, executor, and inventory model. Built on the [`core/go`](/go/) primitives.
@@ -17,13 +8,13 @@ Ansible parser, executor, and inventory model. Built on the [`core/go`](/go/) pr
 ## Install
 
 ```sh
-go get dappco.re/go/ansible@latest
+go get github.com/dappcore/go-ansible/go@latest
 ```
 
 ## Import
 
 ```go
-import "dappco.re/go/ansible"
+import "github.com/dappcore/go-ansible/go"
 ```
 
 ## Status

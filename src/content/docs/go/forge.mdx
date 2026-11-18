@@ -1,15 +1,6 @@
 ---
 title: forge
 description: Forgejo client — repo, branch, hook, runner orchestration.
-head:
-  - tag: meta
-    attrs:
-      name: go-import
-      content: 'dappco.re/go/forge git https://github.com/dappcore/go-forge.git go'
-  - tag: meta
-    attrs:
-      name: go-source
-      content: 'dappco.re/go/forge https://github.com/dappcore/go-forge https://github.com/dappcore/go-forge/tree/main/go{/dir} https://github.com/dappcore/go-forge/blob/main/go{/dir}/{file}#L{line}'
 ---
 
 Typed HTTP client for Forgejo (and Gitea) — repos, branches, issues, pull
@@ -21,13 +12,13 @@ config returns a [`Result`](/go/result/).
 ## Install
 
 ```sh
-go get dappco.re/go/forge@latest
+go get github.com/dappcore/go-forge/go@latest
 ```
 
 ## Import
 
 ```go
-import "dappco.re/go/forge"
+import "github.com/dappcore/go-forge/go"
 ```
 
 ## Quick start
