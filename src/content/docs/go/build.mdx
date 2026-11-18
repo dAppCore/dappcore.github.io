@@ -1,15 +1,6 @@
 ---
 title: build
 description: Multi-language build orchestrator — Apple, Docker, Go, Node, Wails, more.
-head:
-  - tag: meta
-    attrs:
-      name: go-import
-      content: 'dappco.re/go/build git https://github.com/dappcore/go-build.git go'
-  - tag: meta
-    attrs:
-      name: go-source
-      content: 'dappco.re/go/build https://github.com/dappcore/go-build https://github.com/dappcore/go-build/tree/main/go{/dir} https://github.com/dappcore/go-build/blob/main/go{/dir}/{file}#L{line}'
 ---
 
 Multi-language build orchestrator — Apple, Docker, Go, Node, Wails, more. Built on the [`core/go`](/go/) primitives.
@@ -17,13 +8,13 @@ Multi-language build orchestrator — Apple, Docker, Go, Node, Wails, more. Buil
 ## Install
 
 ```sh
-go get dappco.re/go/build@latest
+go get github.com/dappcore/go-build/go@latest
 ```
 
 ## Import
 
 ```go
-import "dappco.re/go/build"
+import "github.com/dappcore/go-build/go"
 ```
 
 ## Status

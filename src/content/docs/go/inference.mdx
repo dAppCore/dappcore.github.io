@@ -1,15 +1,6 @@
 ---
 title: inference
 description: Local text generation — the Backend contract every GPU-specific runtime implements.
-head:
-  - tag: meta
-    attrs:
-      name: go-import
-      content: 'dappco.re/go/inference git https://github.com/dappcore/go-inference.git go'
-  - tag: meta
-    attrs:
-      name: go-source
-      content: 'dappco.re/go/inference https://github.com/dappcore/go-inference https://github.com/dappcore/go-inference/tree/main/go{/dir} https://github.com/dappcore/go-inference/blob/main/go{/dir}/{file}#L{line}'
 ---
 
 The shared contract every text-generation backend implements. `TextModel`
@@ -22,14 +13,14 @@ external dependencies.
 ## Install
 
 ```sh
-go get dappco.re/go/inference@latest
+go get github.com/dappcore/go-inference/go@latest
 ```
 
 ## Import
 
 ```go
 import (
-    "dappco.re/go/inference"
+    "github.com/dappcore/go-inference/go"
 
     // Pick one or more — each blank import registers a backend
     _ "forge.lthn.ai/core/go-mlx"   // "metal" backend on darwin/arm64

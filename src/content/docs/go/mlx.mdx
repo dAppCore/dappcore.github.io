@@ -1,15 +1,6 @@
 ---
 title: mlx
 description: Native Apple Metal GPU inference + training via mlx-c CGO.
-head:
-  - tag: meta
-    attrs:
-      name: go-import
-      content: 'dappco.re/go/mlx git https://github.com/dappcore/go-mlx.git go'
-  - tag: meta
-    attrs:
-      name: go-source
-      content: 'dappco.re/go/mlx https://github.com/dappcore/go-mlx https://github.com/dappcore/go-mlx/tree/main/go{/dir} https://github.com/dappcore/go-mlx/blob/main/go{/dir}/{file}#L{line}'
 ---
 
 Native Apple Metal GPU inference and training via mlx-c CGO bindings.
@@ -32,7 +23,7 @@ go get dappco.re/go/mlx@latest
 
 ```go
 import (
-    "dappco.re/go/inference"
+    "github.com/dappcore/go-inference/go"
     _ "dappco.re/go/mlx"   // blank import registers "metal" backend
 )
 ```

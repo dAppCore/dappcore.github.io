@@ -1,15 +1,6 @@
 ---
 title: process
 description: Process orchestration — exec, daemon, lifecycle, status.
-head:
-  - tag: meta
-    attrs:
-      name: go-import
-      content: 'dappco.re/go/process git https://github.com/dappcore/go-process.git go'
-  - tag: meta
-    attrs:
-      name: go-source
-      content: 'dappco.re/go/process https://github.com/dappcore/go-process https://github.com/dappcore/go-process/tree/main/go{/dir} https://github.com/dappcore/go-process/blob/main/go{/dir}/{file}#L{line}'
 ---
 
 Process supervisor primitives — start, stop, signal, wait, restart. The
@@ -20,13 +11,13 @@ returns a [`Result`](/go/result/).
 ## Install
 
 ```sh
-go get dappco.re/go/process@latest
+go get github.com/dappcore/go-process/go@latest
 ```
 
 ## Import
 
 ```go
-import "dappco.re/go/process"
+import "github.com/dappcore/go-process/go"
 ```
 
 ## One-shot exec
